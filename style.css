@@ -1,0 +1,366 @@
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #0a0a0a;
+  --green: #39ff85;
+  --green2: #1aff6b;
+  --dim: #1c1c1c;
+  --text: #e8e8e8;
+  --muted: #555;
+  --card: #111;
+  --border: #1e1e1e;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  overflow: hidden;
+}
+
+body.ready {
+  overflow-y: auto;
+}
+
+#intro {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+#intro.gone {
+  opacity: 0;
+  transform: translateY(-40px);
+  pointer-events: none;
+}
+
+#intro-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+#intro-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2.8rem);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: fadeUp 0.7s ease 0.3s forwards;
+}
+
+#bar-wrap {
+  width: 280px;
+  height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  opacity: 0;
+  animation: fadeIn 0.4s ease 0.9s forwards;
+}
+
+#bar {
+  height: 100%;
+  width: 0%;
+  background: var(--green);
+  border-radius: 2px;
+  transition: width 2.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#scroll-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+#scroll-hint.show {
+  opacity: 1;
+}
+
+#main {
+  min-height: 100vh;
+}
+
+#main.hidden {
+  opacity: 0;
+}
+
+#main.visible {
+  opacity: 1;
+  transition: opacity 0.6s ease;
+}
+
+#hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8vw;
+  gap: 40px;
+}
+
+#hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  flex: 1;
+}
+
+#brand-word {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(3.2rem, 7vw, 6rem);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+}
+
+.w1 {
+  background: linear-gradient(135deg, #d4d4d4 0%, var(--green) 60%, #111 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.w2 {
+  background: linear-gradient(135deg, var(--green) 0%, #1c7a3e 80%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.w3 {
+  background: linear-gradient(135deg, #c8c8c8 10%, var(--green2) 50%, #0a0a0a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+#tagline {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 300;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+}
+
+#hero-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+}
+
+#blob {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(57,255,133,0.06) 0%, transparent 70%);
+  border-radius: 50%;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+#hero-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 320px;
+  position: relative;
+  z-index: 1;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot.green {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.dot.dim {
+  background: #2a2a2a;
+}
+
+.fname {
+  font-size: 0.82rem;
+  color: var(--text);
+  flex: 1;
+  font-weight: 400;
+}
+
+.fsize {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+#faq {
+  padding: 120px 8vw;
+  display: flex;
+  flex-direction: column;
+  gap: 60px;
+  border-top: 1px solid var(--border);
+}
+
+#faq-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+#faq-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+
+.faq-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.faq-item.in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.faq-q {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: 0.01em;
+}
+
+.faq-a {
+  font-size: 0.88rem;
+  color: #888;
+  line-height: 1.7;
+  font-weight: 300;
+}
+
+#cta {
+  padding: 100px 8vw;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--border);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+#cta.in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#cta-btn {
+  display: inline-block;
+  padding: 18px 56px;
+  background: var(--green);
+  color: #000;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  border-radius: 100px;
+  text-transform: lowercase;
+  transition: background 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+}
+
+#cta-btn:hover {
+  background: #fff;
+  transform: scale(1.04);
+  box-shadow: 0 0 30px rgba(57,255,133,0.25);
+}
+
+#footer {
+  padding: 32px 8vw;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+@keyframes fadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  #hero {
+    flex-direction: column;
+    padding: 80px 6vw 60px;
+    text-align: center;
+  }
+
+  #hero-right {
+    justify-content: center;
+  }
+
+  #hero-card {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  #faq-list {
+    grid-template-columns: 1fr;
+  }
+
+  #brand-word {
+    font-size: clamp(3rem, 14vw, 5rem);
+  }
+}
