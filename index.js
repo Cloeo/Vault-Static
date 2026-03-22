@@ -11,6 +11,7 @@ const fs = require('fs');
 const app = express();
 const db = new Database('vault.db');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
+
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
 
 db.pragma('journal_mode = WAL');
@@ -49,34 +50,42 @@ db.exec(`
   );
 `);
 
+app.set('trust proxy', 1);
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + path.extname(file.originalname))
 });
-const upload = multer({ storage, limits: { fileSize: 500 * 1024 * 1024 } });
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 500 * 1024 * 1024 * 1024 }
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
 app.use(session({
   store: new SQLiteStore({ client: db, expired: { clear: true, intervalMs: 900000 } }),
-  secret: process.env.SESSION_SECRET || 'vnd_secret_key_change_in_prod',
-  resave: false,
+  secret: process.env.SESSION_SECRET || 'vnd_fallback_secret_32chars_xyzabc',
+  resave: true,
   saveUninitialized: false,
+  name: 'vnd.sid',
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
+    sameSite: 'lax',
     maxAge: 1000 * 60 * 60 * 24 * 30
   }
 }));
 
 function requireAuth(req, res, next) {
-  if (!req.session.userId) return res.redirect('/accountauth');
+  if (!req.session || !req.session.userId) return res.redirect('/accountauth');
   next();
 }
 
 function requireAuthAPI(req, res, next) {
-  if (!req.session.userId) return res.status(401).json({ error: 'not logged in' });
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'not logged in' });
   next();
 }
 
@@ -93,6 +102,7 @@ function generateSlug() {
 
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
+
   if (!username || username.trim().length < 2)
     return res.status(400).json({ error: 'username must be at least 2 characters', field: 'username' });
   if (!password || password.length < 6)
@@ -104,9 +114,14 @@ app.post('/api/register', async (req, res) => {
 
   const hash = await bcrypt.hash(password, 12);
   const result = db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run(clean, hash);
+
   req.session.userId = result.lastInsertRowid;
   req.session.username = clean;
-  return res.json({ ok: true, username: clean });
+
+  req.session.save((err) => {
+    if (err) return res.status(500).json({ error: 'session error' });
+    return res.json({ ok: true, username: clean });
+  });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -121,7 +136,11 @@ app.post('/api/login', async (req, res) => {
 
   req.session.userId = user.id;
   req.session.username = user.username;
-  return res.json({ ok: true, username: user.username });
+
+  req.session.save((err) => {
+    if (err) return res.status(500).json({ error: 'session error' });
+    return res.json({ ok: true, username: user.username });
+  });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -129,7 +148,7 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', (req, res) => {
-  if (!req.session.userId) return res.status(401).json({ error: 'not logged in' });
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'not logged in' });
   return res.json({ userId: req.session.userId, username: req.session.username });
 });
 
@@ -142,14 +161,10 @@ app.post('/api/projects', requireAuthAPI, upload.array('files', 100), async (req
   const isDownloadable = is_downloadable === '1';
   let hashedPw = null;
 
-  if (isPrivate && password) {
-    hashedPw = await bcrypt.hash(password, 10);
-  }
+  if (isPrivate && password) hashedPw = await bcrypt.hash(password, 10);
 
   let slug = generateSlug();
-  while (db.prepare('SELECT id FROM projects WHERE slug = ?').get(slug)) {
-    slug = generateSlug();
-  }
+  while (db.prepare('SELECT id FROM projects WHERE slug = ?').get(slug)) slug = generateSlug();
 
   const proj = db.prepare(
     'INSERT INTO projects (user_id, title, description, slug, is_private, password, is_downloadable) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -196,7 +211,7 @@ app.get('/api/projects/:slug', async (req, res) => {
   if (!proj) return res.status(404).json({ error: 'not found' });
 
   if (proj.is_private) {
-    const isOwner = req.session.userId && req.session.userId === proj.user_id;
+    const isOwner = req.session.userId && Number(req.session.userId) === Number(proj.user_id);
     if (!isOwner) {
       const pw = req.query.password;
       if (!pw) return res.json({ locked: true });
@@ -218,7 +233,7 @@ app.get('/api/projects/:slug/download/:fileId', async (req, res) => {
   if (!proj || !proj.is_downloadable) return res.status(403).json({ error: 'not allowed' });
 
   if (proj.is_private) {
-    const isOwner = req.session.userId && req.session.userId === proj.user_id;
+    const isOwner = req.session.userId && Number(req.session.userId) === Number(proj.user_id);
     if (!isOwner) return res.status(401).json({ error: 'unauthorized' });
   }
 
@@ -232,7 +247,7 @@ app.get('/api/projects/:slug/download/:fileId', async (req, res) => {
 app.get('/accountauth', (req, res) => res.sendFile(path.join(__dirname, 'accountauth.html')));
 app.get('/projectstorage', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'projectstorage.html')));
 app.get('/p/:slug', (req, res) => res.sendFile(path.join(__dirname, 'project-view.html')));
-app.get('/dashboard', requireAuth, (req, res) => res.redirect('/projectstorage'));
+app.get('/dashboard', (req, res) => res.redirect('/projectstorage'));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 const PORT = process.env.PORT || 3000;
