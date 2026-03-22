@@ -4,38 +4,43 @@ const scrollHint = document.getElementById('scroll-hint');
 const main = document.getElementById('main');
 
 let introGone = false;
+let hintReady = false;
+
+document.body.style.overflow = 'hidden';
 
 window.addEventListener('load', () => {
   setTimeout(() => {
     bar.style.width = '100%';
-  }, 1000);
+  }, 600);
 
   setTimeout(() => {
     scrollHint.classList.add('show');
-  }, 3600);
+    hintReady = true;
+  }, 3200);
 });
 
 function dismissIntro() {
-  if (introGone) return;
+  if (introGone || !hintReady) return;
   introGone = true;
 
   intro.classList.add('gone');
   main.classList.remove('hidden');
-  document.body.classList.add('ready');
 
   setTimeout(() => {
     main.classList.add('visible');
     intro.style.display = 'none';
+    document.body.style.overflow = '';
+    document.body.classList.add('ready');
   }, 850);
 }
 
 window.addEventListener('wheel', (e) => {
-  if (!scrollHint.classList.contains('show')) return;
+  if (!hintReady) return;
   if (e.deltaY > 0) dismissIntro();
 }, { passive: true });
 
-window.addEventListener('touchstart', () => {
-  if (scrollHint.classList.contains('show')) dismissIntro();
+window.addEventListener('touchend', () => {
+  if (hintReady) dismissIntro();
 }, { passive: true });
 
 const faqItems = document.querySelectorAll('.faq-item');
@@ -46,7 +51,7 @@ const observer = new IntersectionObserver((entries) => {
     if (entry.isIntersecting) {
       setTimeout(() => {
         entry.target.classList.add('in');
-      }, i * 80);
+      }, i * 90);
       observer.unobserve(entry.target);
     }
   });
