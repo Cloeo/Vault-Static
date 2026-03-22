@@ -40,7 +40,7 @@ function formatBytes(bytes) {
 
 async function init() {
   try {
-    const res = await fetch('/api/me');
+    const res = await fetch('/api/me', { credentials: 'same-origin' });
     if (!res.ok) { window.location.href = '/accountauth'; return; }
     currentUser = await res.json();
     sidebarUsername.textContent = currentUser.username;
@@ -53,7 +53,7 @@ async function init() {
 
 async function loadMyProjects() {
   try {
-    const res = await fetch('/api/projects/mine');
+    const res = await fetch('/api/projects/mine', { credentials: 'same-origin' });
     const data = await res.json();
     projectsGrid.innerHTML = '';
     if (!data.length) {
@@ -69,7 +69,7 @@ async function loadMyProjects() {
 
 async function loadPublicProjects() {
   try {
-    const res = await fetch('/api/projects/public');
+    const res = await fetch('/api/projects/public', { credentials: 'same-origin' });
     const data = await res.json();
     publicGrid.innerHTML = '';
     if (!data.length) {
@@ -261,7 +261,7 @@ btnPublish.addEventListener('click', async () => {
   selectedFiles.forEach(f => form.append('files', f));
 
   try {
-    const res = await fetch('/api/projects', { method: 'POST', body: form });
+    const res = await fetch('/api/projects', { method: 'POST', body: form, credentials: 'same-origin' });
     const data = await res.json();
     if (res.ok) {
       showToast('project published', 'success');
@@ -279,7 +279,7 @@ btnPublish.addEventListener('click', async () => {
 });
 
 btnLogout.addEventListener('click', async () => {
-  await fetch('/api/logout', { method: 'POST' });
+  await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
   window.location.href = '/';
 });
 
