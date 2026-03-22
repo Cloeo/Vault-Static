@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vault n Drop — Project</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #080808; --green: #39ff85; --card: #0e0e0e;
+      --border: #1a1a1a; --border2: #222; --text: #e8e8e8;
+      --muted: #444; --muted2: #666; --input-bg: #0d0d0d;
+    }
+    html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; }
+    #bg-grid {
+      position: fixed; inset: 0;
+      background-image: linear-gradient(rgba(255,255,255,0.011) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.011) 1px, transparent 1px);
+      background-size: 90px 90px; pointer-events: none; z-index: 0;
+    }
+    #wrap { max-width: 680px; margin: 0 auto; padding: 80px 24px 80px; position: relative; z-index: 1; }
+    #back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted2); font-size: 0.78rem; text-decoration: none; margin-bottom: 40px; transition: color 0.2s; }
+    #back:hover { color: var(--text); }
+    #proj-header { margin-bottom: 32px; display: flex; flex-direction: column; gap: 10px; }
+    #proj-title { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; }
+    #proj-meta { font-size: 0.78rem; color: var(--muted2); display: flex; gap: 12px; flex-wrap: wrap; }
+    #proj-desc { font-size: 0.88rem; color: var(--muted2); line-height: 1.7; }
+    #file-section { margin-top: 36px; display: flex; flex-direction: column; gap: 10px; }
+    .file-row {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px;
+    }
+    .file-row-name { flex: 1; font-size: 0.85rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-row-size { font-size: 0.75rem; color: var(--muted); }
+    .file-dl { background: none; border: 1px solid var(--border2); color: var(--muted2); border-radius: 6px; padding: 5px 12px; font-size: 0.72rem; cursor: pointer; font-family: 'DM Sans', sans-serif; text-decoration: none; transition: color 0.2s, border-color 0.2s; }
+    .file-dl:hover { color: var(--green); border-color: rgba(57,255,133,0.3); }
+    #pw-gate { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; margin-top: 32px; }
+    #pw-gate p { font-size: 0.85rem; color: var(--muted2); }
+    #pw-input { background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 0.85rem; color: var(--text); font-family: 'DM Sans', sans-serif; outline: none; width: 280px; }
+    #pw-input:focus { border-color: rgba(57,255,133,0.25); }
+    #pw-btn { background: var(--green); color: #000; border: none; border-radius: 100px; padding: 10px 22px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+    #pw-err { font-size: 0.78rem; color: #ff6b6b; display: none; }
+    #pw-err.show { display: block; }
+  </style>
+</head>
+<body>
+  <div id="bg-grid"></div>
+  <div id="wrap">
+    <a href="/" id="back">← vault n drop</a>
+    <div id="proj-header">
+      <h1 id="proj-title">loading...</h1>
+      <div id="proj-meta"></div>
+      <p id="proj-desc"></p>
+    </div>
+    <div id="content"></div>
+  </div>
+  <script>
+    const slug = window.location.pathname.split('/p/')[1];
+    let projectData = null;
+
+    async function load() {
+      try {
+        const res = await fetch('/api/projects/' + slug);
+        const data = await res.json();
+        if (data.locked) {
+          showGate();
+          return;
+        }
+        if (!res.ok) {
+          document.getElementById('proj-title').textContent = 'project not found';
+          return;
+        }
+        projectData = data;
+        render(data);
+      } catch {
+        document.getElementById('proj-title').textContent = 'could not load project';
+      }
+    }
+
+    function render(data) {
+      document.title = data.title + ' — Vault n Drop';
+      document.getElementById('proj-title').textContent = data.title;
+      document.getElementById('proj-desc').textContent = data.description || '';
+      document.getElementById('proj-meta').innerHTML =
+        '<span>by ' + esc(data.owner) + '</span>' +
+        '<span>·</span>' +
+        '<span>' + data.files.length + ' file' + (data.files.length !== 1 ? 's' : '') + '</span>' +
+        (data.is_downloadable ? '<span>·</span><span>downloadable</span>' : '');
+
+      const section = document.createElement('div');
+      section.id = 'file-section';
+      data.files.forEach(f => {
+        const row = document.createElement('div');
+        row.className = 'file-row';
+        row.innerHTML =
+          '<span class="file-row-name">' + esc(f.name) + '</span>' +
+          '<span class="file-row-size">' + esc(f.size_label) + '</span>' +
+          (data.is_downloadable
+            ? '<a class="file-dl" href="/api/projects/' + slug + '/download/' + f.id + '">download</a>'
+            : '');
+        section.appendChild(row);
+      });
+      document.getElementById('content').appendChild(section);
+    }
+
+    function showGate() {
+      document.getElementById('proj-title').textContent = 'private project';
+      const gate = document.createElement('div');
+      gate.id = 'pw-gate';
+      gate.innerHTML =
+        '<p>this project is password protected</p>' +
+        '<input id="pw-input" type="password" placeholder="enter project password" />' +
+        '<button id="pw-btn">unlock</button>' +
+        '<span id="pw-err">wrong password</span>';
+      document.getElementById('content').appendChild(gate);
+      document.getElementById('pw-btn').addEventListener('click', unlock);
+      document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
+    }
+
+    async function unlock() {
+      const pw = document.getElementById('pw-input').value;
+      const err = document.getElementById('pw-err');
+      err.classList.remove('show');
+      try {
+        const res = await fetch('/api/projects/' + slug + '?password=' + encodeURIComponent(pw));
+        const data = await res.json();
+        if (res.ok && !data.locked) {
+          document.getElementById('pw-gate').remove();
+          render(data);
+        } else {
+          err.classList.add('show');
+        }
+      } catch {
+        err.classList.add('show');
+      }
+    }
+
+    function esc(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    load();
+  </script>
+</body>
+</html>
