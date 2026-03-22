@@ -65,7 +65,7 @@ btnRegister.addEventListener('click', async () => {
     if (res.ok) {
       showToast('account created — welcome!', 'success');
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        window.location.href = '/projectstorage';
       }, 1000);
     } else {
       showToast(data.error || 'something went wrong', 'error');
@@ -111,7 +111,7 @@ btnLogin.addEventListener('click', async () => {
     if (res.ok) {
       showToast('welcome back!', 'success');
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        window.location.href = '/projectstorage';
       }, 900);
     } else {
       if (data.field === 'username') {
