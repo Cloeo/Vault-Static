@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vault n Drop — Auth</title>
+  <link rel="stylesheet" href="auth.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <div id="bg-grid"></div>
+  <div id="bg-glow"></div>
+
+  <a href="/" id="logo">vault n drop</a>
+
+  <div id="scene">
+    <div id="card-wrap">
+
+      <div class="card" id="card-register">
+        <h2 class="card-title">create account</h2>
+        <p class="card-sub">start storing for free</p>
+        <div class="field-group">
+          <label>username</label>
+          <input type="text" id="reg-username" autocomplete="off" spellcheck="false" placeholder="pick a username" />
+        </div>
+        <div class="field-group">
+          <label>password</label>
+          <input type="password" id="reg-password" placeholder="create a password" />
+        </div>
+        <button class="btn-main" id="btn-register">create account</button>
+        <p class="switch-text">already have an account? <span class="switch-link" id="go-login">login here.</span></p>
+      </div>
+
+      <div class="card hidden-card" id="card-login">
+        <h2 class="card-title">welcome back</h2>
+        <p class="card-sub">sign in to your vault</p>
+        <div class="field-group">
+          <label>username</label>
+          <input type="text" id="login-username" autocomplete="off" spellcheck="false" placeholder="your username" />
+        </div>
+        <div class="field-group">
+          <label>password</label>
+          <input type="password" id="login-password" placeholder="your password" />
+        </div>
+        <button class="btn-main" id="btn-login">login to account</button>
+        <p class="switch-text">no account yet? <span class="switch-link" id="go-register">create one.</span></p>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="auth.js"></script>
+</body>
+</html>
