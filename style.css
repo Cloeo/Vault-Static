@@ -26,6 +26,29 @@ body {
   overflow: hidden;
 }
 
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse 70% 60% at 85% 20%, rgba(57,255,133,0.04) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 40% at 10% 80%, rgba(57,255,133,0.03) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+  background-size: 100px 100px;
+  pointer-events: none;
+  z-index: 0;
+}
+
 body.ready {
   overflow-y: auto;
 }
@@ -38,12 +61,35 @@ body.ready {
   align-items: center;
   justify-content: center;
   z-index: 100;
-  transition: opacity 0.8s ease, transform 0.8s ease;
+  transition: opacity 1s cubic-bezier(0.4,0,0.2,1), transform 1s cubic-bezier(0.4,0,0.2,1);
+  overflow: hidden;
+}
+
+#intro::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 50%, rgba(57,255,133,0.055) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 80% 30%, rgba(57,255,133,0.03) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+#intro::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(57,255,133,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(57,255,133,0.03) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+  pointer-events: none;
 }
 
 #intro.gone {
   opacity: 0;
-  transform: translateY(-40px);
+  transform: translateY(-32px);
   pointer-events: none;
 }
 
@@ -56,40 +102,47 @@ body.ready {
 
 #intro-title {
   font-family: 'Syne', sans-serif;
-  font-size: clamp(1.6rem, 4vw, 2.8rem);
+  font-size: clamp(1.4rem, 3.5vw, 2.4rem);
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.02em;
   opacity: 0;
-  transform: translateY(12px);
-  animation: fadeUp 0.7s ease 0.3s forwards;
+  transform: translateY(16px);
+  animation: fadeUp 1s cubic-bezier(0.16,1,0.3,1) 0.2s forwards;
+  position: relative;
+  z-index: 1;
 }
 
 #bar-wrap {
-  width: 280px;
-  height: 2px;
-  background: var(--border);
+  width: 240px;
+  height: 1px;
+  background: rgba(255,255,255,0.07);
   border-radius: 2px;
   overflow: hidden;
   opacity: 0;
-  animation: fadeIn 0.4s ease 0.9s forwards;
+  animation: fadeIn 0.6s ease 0.8s forwards;
+  position: relative;
+  z-index: 1;
 }
 
 #bar {
   height: 100%;
   width: 0%;
-  background: var(--green);
+  background: linear-gradient(90deg, rgba(57,255,133,0.4), var(--green));
   border-radius: 2px;
-  transition: width 2.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 2.6s cubic-bezier(0.4, 0, 0.15, 1);
+  box-shadow: 0 0 8px var(--green);
 }
 
 #scroll-hint {
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: var(--muted);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   opacity: 0;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.8s ease;
+  position: relative;
+  z-index: 1;
 }
 
 #scroll-hint.show {
