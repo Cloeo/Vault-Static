@@ -11,98 +11,77 @@ function showToast(msg, type) {
   clearTimeout(toastTimer);
   toast.textContent = msg;
   toast.className = 'show ' + type;
-  toastTimer = setTimeout(() => {
-    toast.className = '';
-  }, 3200);
+  toastTimer = setTimeout(() => { toast.className = ''; }, 3200);
 }
 
 function setError(input, on) {
-  if (on) {
-    input.classList.add('error');
-  } else {
-    input.classList.remove('error');
-  }
+  input.classList.toggle('error', on);
 }
 
-goLogin.addEventListener('click', () => {
-  cardWrap.classList.add('flipped');
-});
-
-goRegister.addEventListener('click', () => {
-  cardWrap.classList.remove('flipped');
-});
+goLogin.addEventListener('click', () => cardWrap.classList.add('flipped'));
+goRegister.addEventListener('click', () => cardWrap.classList.remove('flipped'));
 
 btnRegister.addEventListener('click', async () => {
-  const username = document.getElementById('reg-username').value.trim();
-  const password = document.getElementById('reg-password').value;
+  const usernameEl = document.getElementById('reg-username');
+  const passwordEl = document.getElementById('reg-password');
+  const username = usernameEl.value.trim();
+  const password = passwordEl.value;
 
-  setError(document.getElementById('reg-username'), false);
-  setError(document.getElementById('reg-password'), false);
+  setError(usernameEl, false);
+  setError(passwordEl, false);
 
-  if (!username) {
-    setError(document.getElementById('reg-username'), true);
-    showToast('enter a username', 'error');
-    return;
-  }
-
-  if (password.length < 6) {
-    setError(document.getElementById('reg-password'), true);
-    showToast('password must be at least 6 characters', 'error');
-    return;
-  }
+  if (!username) { setError(usernameEl, true); showToast('enter a username', 'error'); return; }
+  if (password.length < 6) { setError(passwordEl, true); showToast('password must be at least 6 characters', 'error'); return; }
 
   btnRegister.disabled = true;
+  btnRegister.textContent = 'creating...';
 
   try {
     const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({ username, password })
     });
 
     const data = await res.json();
 
     if (res.ok) {
-      showToast('account created — welcome!', 'success');
-      setTimeout(() => {
-        window.location.href = '/projectstorage';
-      }, 1000);
+      showToast('account created!', 'success');
+      window.location.href = '/projectstorage';
     } else {
       showToast(data.error || 'something went wrong', 'error');
-      if (data.field === 'username') setError(document.getElementById('reg-username'), true);
+      if (data.field === 'username') setError(usernameEl, true);
+      if (data.field === 'password') setError(passwordEl, true);
     }
   } catch {
     showToast('could not connect to server', 'error');
   }
 
   btnRegister.disabled = false;
+  btnRegister.textContent = 'create account';
 });
 
 btnLogin.addEventListener('click', async () => {
-  const username = document.getElementById('login-username').value.trim();
-  const password = document.getElementById('login-password').value;
+  const usernameEl = document.getElementById('login-username');
+  const passwordEl = document.getElementById('login-password');
+  const username = usernameEl.value.trim();
+  const password = passwordEl.value;
 
-  setError(document.getElementById('login-username'), false);
-  setError(document.getElementById('login-password'), false);
+  setError(usernameEl, false);
+  setError(passwordEl, false);
 
-  if (!username) {
-    setError(document.getElementById('login-username'), true);
-    showToast('enter your username', 'error');
-    return;
-  }
-
-  if (!password) {
-    setError(document.getElementById('login-password'), true);
-    showToast('enter your password', 'error');
-    return;
-  }
+  if (!username) { setError(usernameEl, true); showToast('enter your username', 'error'); return; }
+  if (!password) { setError(passwordEl, true); showToast('enter your password', 'error'); return; }
 
   btnLogin.disabled = true;
+  btnLogin.textContent = 'logging in...';
 
   try {
     const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({ username, password })
     });
 
@@ -110,32 +89,22 @@ btnLogin.addEventListener('click', async () => {
 
     if (res.ok) {
       showToast('welcome back!', 'success');
-      setTimeout(() => {
-        window.location.href = '/projectstorage';
-      }, 900);
+      window.location.href = '/projectstorage';
     } else {
-      if (data.field === 'username') {
-        setError(document.getElementById('login-username'), true);
-        showToast('username is wrong', 'error');
-      } else if (data.field === 'password') {
-        setError(document.getElementById('login-password'), true);
-        showToast('password is wrong', 'error');
-      } else {
-        showToast(data.error || 'something went wrong', 'error');
-      }
+      if (data.field === 'username') { setError(usernameEl, true); showToast('username is wrong', 'error'); }
+      else if (data.field === 'password') { setError(passwordEl, true); showToast('password is wrong', 'error'); }
+      else showToast(data.error || 'something went wrong', 'error');
     }
   } catch {
     showToast('could not connect to server', 'error');
   }
 
   btnLogin.disabled = false;
+  btnLogin.textContent = 'login to account';
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
-  if (!cardWrap.classList.contains('flipped')) {
-    btnRegister.click();
-  } else {
-    btnLogin.click();
-  }
+  if (!cardWrap.classList.contains('flipped')) btnRegister.click();
+  else btnLogin.click();
 });
