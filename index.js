@@ -21,6 +21,15 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
     password TEXT NOT NULL,
+    is_admin INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT (strftime('%s','now'))
+  );
+  CREATE TABLE IF NOT EXISTS admin_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    website_username TEXT NOT NULL,
+    code TEXT UNIQUE NOT NULL,
+    session_token TEXT DEFAULT NULL,
+    used INTEGER DEFAULT 0,
     created_at INTEGER DEFAULT (strftime('%s','now'))
   );
   CREATE TABLE IF NOT EXISTS projects (
@@ -32,6 +41,7 @@ db.exec(`
     is_private INTEGER DEFAULT 0,
     password TEXT DEFAULT NULL,
     is_downloadable INTEGER DEFAULT 0,
+    instant_download INTEGER DEFAULT 0,
     views INTEGER DEFAULT 0,
     last_accessed INTEGER DEFAULT (strftime('%s','now')),
     created_at INTEGER DEFAULT (strftime('%s','now')),
@@ -68,16 +78,13 @@ db.exec(`
 
 try { db.exec(`ALTER TABLE projects ADD COLUMN last_accessed INTEGER DEFAULT (strftime('%s','now'));`); } catch(e) {}
 try { db.exec(`ALTER TABLE projects ADD COLUMN views INTEGER DEFAULT 0;`); } catch(e) {}
+try { db.exec(`ALTER TABLE projects ADD COLUMN instant_download INTEGER DEFAULT 0;`); } catch(e) {}
 try { db.exec(`ALTER TABLE project_files ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream';`); } catch(e) {}
+try { db.exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0;`); } catch(e) {}
 
 app.set('trust proxy', 1);
 
-app.use((req, res, next) => {
-  res.setTimeout(0);
-  req.setTimeout(0);
-  next();
-});
-
+app.use((req, res, next) => { res.setTimeout(0); req.setTimeout(0); next(); });
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname)));
@@ -95,11 +102,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + path.extname(file.originalname))
 });
-
-const upload = multer({
-  storage,
-  limits: { fileSize: Infinity, fieldSize: Infinity, files: 100 }
-});
+const upload = multer({ storage, limits: { fileSize: Infinity, fieldSize: Infinity, files: 100 } });
 
 function formatBytes(b) {
   if (b < 1024) return b + ' B';
@@ -109,6 +112,13 @@ function formatBytes(b) {
 }
 
 function generateSlug() { return crypto.randomBytes(6).toString('hex'); }
+
+function generateAdminCode() {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let code = '';
+  for (let i = 0; i < 9; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return 'vaultndrop-' + code;
+}
 
 function getMimeType(filename) {
   const ext = path.extname(filename).toLowerCase();
@@ -120,9 +130,9 @@ function getMimeType(filename) {
     '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif',
     '.webp':'image/webp','.svg':'image/svg+xml','.mp4':'video/mp4','.webm':'video/webm',
     '.mp3':'audio/mpeg','.pdf':'application/pdf','.zip':'application/zip',
-    '.tar':'application/x-tar','.gz':'application/gzip','.rar':'application/x-rar-compressed',
-    '.7z':'application/x-7z-compressed','.safetensors':'application/octet-stream',
-    '.ckpt':'application/octet-stream','.pt':'application/octet-stream','.bin':'application/octet-stream'
+    '.tar':'application/x-tar','.gz':'application/gzip',
+    '.safetensors':'application/octet-stream','.ckpt':'application/octet-stream',
+    '.pt':'application/octet-stream','.bin':'application/octet-stream'
   };
   return map[ext] || 'application/octet-stream';
 }
@@ -139,6 +149,15 @@ function requireAuth(req, res, next) {
 
 function requireAuthAPI(req, res, next) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'not logged in' });
+  next();
+}
+
+function requireAdminAPI(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  if (!token) return res.status(401).json({ error: 'no token' });
+  const record = db.prepare('SELECT * FROM admin_tokens WHERE session_token = ? AND used = 1').get(token);
+  if (!record) return res.status(401).json({ error: 'invalid token' });
+  req.adminUsername = record.website_username;
   next();
 }
 
@@ -195,9 +214,93 @@ app.get('/api/me', (req, res) => {
   return res.json({ userId: req.session.userId, username: req.session.username });
 });
 
+app.post('/api/admin/auth', async (req, res) => {
+  try {
+    const { code, username } = req.body;
+    if (!code) return res.status(400).json({ error: 'code required' });
+    const record = db.prepare('SELECT * FROM admin_tokens WHERE code = ?').get(code.trim());
+    if (!record) return res.status(401).json({ error: 'invalid auth code' });
+    if (username && record.website_username.toLowerCase() !== username.toLowerCase()) return res.status(401).json({ error: 'username does not match this code' });
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    db.prepare('UPDATE admin_tokens SET session_token = ?, used = 1 WHERE id = ?').run(sessionToken, record.id);
+    return res.json({ ok: true, token: sessionToken, username: record.website_username });
+  } catch(e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.get('/api/admin/verify', requireAdminAPI, (req, res) => {
+  return res.json({ ok: true, username: req.adminUsername });
+});
+
+app.get('/api/admin/users', requireAdminAPI, (req, res) => {
+  const users = db.prepare('SELECT id, username, is_admin, created_at FROM users ORDER BY created_at DESC').all();
+  return res.json(users.map(u => {
+    const count = db.prepare('SELECT COUNT(*) as c FROM projects WHERE user_id = ?').get(u.id);
+    return { ...u, project_count: count.c };
+  }));
+});
+
+app.delete('/api/admin/users/:id', requireAdminAPI, (req, res) => {
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+    if (!user) return res.status(404).json({ error: 'not found' });
+    const projects = db.prepare('SELECT id FROM projects WHERE user_id = ?').all(user.id);
+    projects.forEach(p => deleteProject(p.id));
+    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+    return res.json({ ok: true });
+  } catch(e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.get('/api/admin/projects', requireAdminAPI, (req, res) => {
+  const projects = db.prepare('SELECT p.*, u.username as owner FROM projects p JOIN users u ON p.user_id = u.id ORDER BY p.created_at DESC').all();
+  return res.json(projects.map(p => ({ id: p.id, title: p.title, slug: p.slug, owner: p.owner, is_private: !!p.is_private, views: p.views || 0 })));
+});
+
+app.delete('/api/admin/projects/:slug', requireAdminAPI, (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ?').get(req.params.slug);
+    if (!proj) return res.status(404).json({ error: 'not found' });
+    deleteProject(proj.id);
+    return res.json({ ok: true });
+  } catch(e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.get('/api/admin/tokens', requireAdminAPI, (req, res) => {
+  return res.json(db.prepare('SELECT * FROM admin_tokens ORDER BY created_at DESC').all());
+});
+
+app.delete('/api/admin/tokens/:id', requireAdminAPI, (req, res) => {
+  db.prepare('DELETE FROM admin_tokens WHERE id = ?').run(req.params.id);
+  return res.json({ ok: true });
+});
+
+app.post('/api/bot/create-admin', (req, res) => {
+  try {
+    const botSecret = req.headers['x-bot-secret'];
+    if (!botSecret || botSecret !== process.env.BOT_SECRET) return res.status(401).json({ error: 'unauthorized' });
+    const { website_username } = req.body;
+    if (!website_username) return res.status(400).json({ error: 'website_username required' });
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(website_username.trim());
+    if (!user) return res.status(404).json({ error: 'user not found on site' });
+    return res.json({ ok: true, username: user.username });
+  } catch(e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.post('/api/bot/gift-code', (req, res) => {
+  try {
+    const botSecret = req.headers['x-bot-secret'];
+    if (!botSecret || botSecret !== process.env.BOT_SECRET) return res.status(401).json({ error: 'unauthorized' });
+    const { website_username } = req.body;
+    if (!website_username) return res.status(400).json({ error: 'website_username required' });
+    let code = generateAdminCode();
+    while (db.prepare('SELECT id FROM admin_tokens WHERE code = ?').get(code)) code = generateAdminCode();
+    db.prepare('INSERT INTO admin_tokens (website_username, code) VALUES (?, ?)').run(website_username.trim(), code);
+    return res.json({ ok: true, code, username: website_username });
+  } catch(e) { return res.status(500).json({ error: 'server error' }); }
+});
+
 app.post('/api/projects', requireAuthAPI, upload.array('files', 100), async (req, res) => {
   try {
-    const { title, description, is_private, is_downloadable, password } = req.body;
+    const { title, description, is_private, is_downloadable, instant_download, password } = req.body;
     if (!title) return res.status(400).json({ error: 'title is required' });
     if (!req.files || !req.files.length) return res.status(400).json({ error: 'at least one file required' });
     const isPrivate = is_private === '1';
@@ -206,8 +309,8 @@ app.post('/api/projects', requireAuthAPI, upload.array('files', 100), async (req
     let slug = generateSlug();
     while (db.prepare('SELECT id FROM projects WHERE slug = ?').get(slug)) slug = generateSlug();
     const proj = db.prepare(
-      'INSERT INTO projects (user_id, title, description, slug, is_private, password, is_downloadable, last_accessed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.session.userId, title.slice(0, 120), (description || '').slice(0, 500), slug, isPrivate ? 1 : 0, hashedPw, is_downloadable === '1' ? 1 : 0, Math.floor(Date.now() / 1000));
+      'INSERT INTO projects (user_id, title, description, slug, is_private, password, is_downloadable, instant_download, last_accessed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.session.userId, title.slice(0, 120), (description || '').slice(0, 500), slug, isPrivate ? 1 : 0, hashedPw, is_downloadable === '1' ? 1 : 0, instant_download === '1' ? 1 : 0, Math.floor(Date.now() / 1000));
     const insertFile = db.prepare('INSERT INTO project_files (project_id, original_name, stored_name, mime_type, size) VALUES (?, ?, ?, ?, ?)');
     req.files.forEach(f => insertFile.run(proj.lastInsertRowid, f.originalname, f.filename, getMimeType(f.originalname), f.size));
     return res.json({ ok: true, slug });
@@ -220,7 +323,7 @@ app.get('/api/projects/mine', requireAuthAPI, (req, res) => {
     const count = db.prepare('SELECT COUNT(*) as c FROM project_files WHERE project_id = ?').get(p.id);
     const likeCount = db.prepare('SELECT COUNT(*) as c FROM project_likes WHERE project_id = ?').get(p.id);
     const commentCount = db.prepare('SELECT COUNT(*) as c FROM project_comments WHERE project_id = ?').get(p.id);
-    return { id: p.id, title: p.title, description: p.description, slug: p.slug, is_private: !!p.is_private, is_downloadable: !!p.is_downloadable, file_count: count.c, views: p.views || 0, likes: likeCount.c, comments: commentCount.c };
+    return { id: p.id, title: p.title, description: p.description, slug: p.slug, is_private: !!p.is_private, is_downloadable: !!p.is_downloadable, instant_download: !!p.instant_download, file_count: count.c, views: p.views || 0, likes: likeCount.c, comments: commentCount.c };
   }));
 });
 
@@ -230,7 +333,7 @@ app.get('/api/projects/public', (req, res) => {
     const count = db.prepare('SELECT COUNT(*) as c FROM project_files WHERE project_id = ?').get(p.id);
     const likeCount = db.prepare('SELECT COUNT(*) as c FROM project_likes WHERE project_id = ?').get(p.id);
     const commentCount = db.prepare('SELECT COUNT(*) as c FROM project_comments WHERE project_id = ?').get(p.id);
-    return { id: p.id, title: p.title, description: p.description, slug: p.slug, owner: p.owner, is_downloadable: !!p.is_downloadable, file_count: count.c, views: p.views || 0, likes: likeCount.c, comments: commentCount.c };
+    return { id: p.id, title: p.title, description: p.description, slug: p.slug, owner: p.owner, is_downloadable: !!p.is_downloadable, instant_download: !!p.instant_download, file_count: count.c, views: p.views || 0, likes: likeCount.c, comments: commentCount.c };
   }));
 });
 
@@ -261,7 +364,8 @@ app.get('/api/projects/:slug', async (req, res) => {
     const files = db.prepare('SELECT * FROM project_files WHERE project_id = ?').all(proj.id);
     return res.json({
       title: proj.title, description: proj.description, owner: proj.owner,
-      is_downloadable: !!proj.is_downloadable, is_private: !!proj.is_private, slug: proj.slug,
+      is_downloadable: !!proj.is_downloadable, instant_download: !!proj.instant_download,
+      is_private: !!proj.is_private, slug: proj.slug,
       views: updatedProj.views || 0, likes: likeCount.c, comments: commentCount.c,
       user_liked: userLiked, is_owner: isOwner,
       files: files.map(f => ({ id: f.id, name: f.original_name, size_label: formatBytes(f.size), mime_type: f.mime_type || getMimeType(f.original_name), is_text: isTextFile(f.original_name) }))
@@ -285,8 +389,7 @@ app.get('/api/projects/:slug/comments', (req, res) => {
   try {
     const proj = db.prepare('SELECT * FROM projects WHERE slug = ?').get(req.params.slug);
     if (!proj) return res.status(404).json({ error: 'not found' });
-    const comments = db.prepare('SELECT * FROM project_comments WHERE project_id = ? ORDER BY created_at ASC').all(proj.id);
-    return res.json(comments.map(c => ({ id: c.id, username: c.username, body: c.body, created_at: c.created_at })));
+    return res.json(db.prepare('SELECT * FROM project_comments WHERE project_id = ? ORDER BY created_at ASC').all(proj.id).map(c => ({ id: c.id, username: c.username, body: c.body, created_at: c.created_at })));
   } catch(e) { return res.status(500).json({ error: 'server error' }); }
 });
 
@@ -328,8 +431,7 @@ app.get('/api/projects/:slug/download/:fileId', async (req, res) => {
   try {
     const proj = db.prepare('SELECT * FROM projects WHERE slug = ?').get(req.params.slug);
     if (!proj) return res.status(404).json({ error: 'not found' });
-    if (!proj.is_downloadable) return res.status(403).json({ error: 'not allowed' });
-
+    if (!proj.is_downloadable && !proj.instant_download) return res.status(403).json({ error: 'not allowed' });
     if (proj.is_private) {
       const isOwner = req.session.userId && Number(req.session.userId) === Number(proj.user_id);
       if (!isOwner) {
@@ -339,29 +441,23 @@ app.get('/api/projects/:slug/download/:fileId', async (req, res) => {
         if (!match) return res.status(401).json({ error: 'wrong password' });
       }
     }
-
     const file = db.prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ?').get(req.params.fileId, proj.id);
     if (!file) return res.status(404).json({ error: 'file not found' });
-
     const filePath = path.join(UPLOADS_DIR, file.stored_name);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'file missing from disk' });
-
     const stat = fs.statSync(filePath);
     const fileSize = stat.size;
     const range = req.headers.range;
-
     res.setHeader('Content-Disposition', 'attachment; filename="' + encodeURIComponent(file.original_name) + '"');
     res.setHeader('Content-Type', file.mime_type || 'application/octet-stream');
     res.setHeader('Accept-Ranges', 'bytes');
-
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunkSize = end - start + 1;
       res.status(206);
       res.setHeader('Content-Range', 'bytes ' + start + '-' + end + '/' + fileSize);
-      res.setHeader('Content-Length', chunkSize);
+      res.setHeader('Content-Length', end - start + 1);
       fs.createReadStream(filePath, { start, end }).pipe(res);
     } else {
       res.setHeader('Content-Length', fileSize);
@@ -381,6 +477,7 @@ app.delete('/api/projects/:slug', requireAuthAPI, (req, res) => {
 
 app.get('/accountauth', (req, res) => res.sendFile(path.join(__dirname, 'accountauth.html')));
 app.get('/projectstorage', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'projectstorage.html')));
+app.get('/adminpanel', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/p/:slug', (req, res) => res.sendFile(path.join(__dirname, 'project-view.html')));
 app.get('/dashboard', (req, res) => res.redirect('/projectstorage'));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
