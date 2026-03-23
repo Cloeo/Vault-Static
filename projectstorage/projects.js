@@ -97,6 +97,7 @@ function buildMyCard(p) {
       <span>${p.file_count} file${p.file_count !== 1 ? 's' : ''}</span>
       <span>·</span>
       <span>${p.is_downloadable ? 'downloadable' : 'view only'}</span>
+      ${p.instant_download ? '<span>·</span><span style="color:#ff8c42">instant dl</span>' : ''}
       <span>·</span>
       <span>${p.views || 0} views</span>
       <span>·</span>
@@ -272,6 +273,7 @@ btnPublish.addEventListener('click', () => {
   form.append('description', desc);
   form.append('is_private', isPrivate ? '1' : '0');
   form.append('is_downloadable', isDownloadable ? '1' : '0');
+  form.append('instant_download', document.getElementById('chk-instant').checked ? '1' : '0');
   if (isPrivate) form.append('password', password);
   selectedFiles.forEach(f => form.append('files', f));
 
