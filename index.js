@@ -32,6 +32,7 @@ db.exec(`
     is_private INTEGER DEFAULT 0,
     password TEXT DEFAULT NULL,
     is_downloadable INTEGER DEFAULT 0,
+    last_accessed INTEGER DEFAULT (strftime('%s','now')),
     created_at INTEGER DEFAULT (strftime('%s','now')),
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
@@ -40,9 +41,18 @@ db.exec(`
     project_id INTEGER NOT NULL,
     original_name TEXT NOT NULL,
     stored_name TEXT NOT NULL,
+    mime_type TEXT DEFAULT 'application/octet-stream',
     size INTEGER DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES projects(id)
   );
+`);
+
+db.exec(`
+  ALTER TABLE projects ADD COLUMN last_accessed INTEGER DEFAULT (strftime('%s','now'));
+`);
+
+db.exec(`
+  ALTER TABLE project_files ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream';
 `);
 
 app.set('trust proxy', 1);
@@ -84,6 +94,28 @@ function generateSlug() {
   return crypto.randomBytes(6).toString('hex');
 }
 
+function getMimeType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  const map = {
+    '.txt': 'text/plain', '.md': 'text/plain', '.js': 'text/plain',
+    '.ts': 'text/plain', '.json': 'application/json', '.html': 'text/plain',
+    '.css': 'text/plain', '.py': 'text/plain', '.sh': 'text/plain',
+    '.log': 'text/plain', '.csv': 'text/plain', '.xml': 'text/plain',
+    '.yml': 'text/plain', '.yaml': 'text/plain', '.env': 'text/plain',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+    '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg',
+    '.pdf': 'application/pdf'
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
+function isTextFile(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  const textExts = ['.txt','.md','.js','.ts','.json','.html','.css','.py','.sh','.log','.csv','.xml','.yml','.yaml','.env','.cfg','.ini','.rs','.go','.c','.cpp','.h','.java','.rb','.php','.swift','.kt'];
+  return textExts.includes(ext);
+}
+
 function requireAuth(req, res, next) {
   if (!req.session || !req.session.userId) return res.redirect('/accountauth');
   next();
@@ -94,10 +126,28 @@ function requireAuthAPI(req, res, next) {
   next();
 }
 
+function deleteProject(projectId) {
+  const files = db.prepare('SELECT stored_name FROM project_files WHERE project_id = ?').all(projectId);
+  files.forEach(f => {
+    const fp = path.join(UPLOADS_DIR, f.stored_name);
+    if (fs.existsSync(fp)) fs.unlinkSync(fp);
+  });
+  db.prepare('DELETE FROM project_files WHERE project_id = ?').run(projectId);
+  db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
+}
+
+function runCleanup() {
+  const cutoff = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+  const stale = db.prepare('SELECT id FROM projects WHERE last_accessed < ?').all(cutoff);
+  stale.forEach(p => deleteProject(p.id));
+}
+
+setInterval(runCleanup, 1000 * 60 * 60 * 6);
+runCleanup();
+
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password } = req.body;
-
     if (!username || username.trim().length < 2)
       return res.status(400).json({ error: 'username must be at least 2 characters', field: 'username' });
     if (!password || password.length < 6)
@@ -109,10 +159,8 @@ app.post('/api/register', async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const result = db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run(clean, hash);
-
     req.session.userId = result.lastInsertRowid;
     req.session.username = clean;
-
     req.session.save((err) => {
       if (err) return res.status(500).json({ error: 'session save failed' });
       return res.json({ ok: true, username: clean });
@@ -135,7 +183,6 @@ app.post('/api/login', async (req, res) => {
 
     req.session.userId = user.id;
     req.session.username = user.username;
-
     req.session.save((err) => {
       if (err) return res.status(500).json({ error: 'session save failed' });
       return res.json({ ok: true, username: user.username });
@@ -169,11 +216,14 @@ app.post('/api/projects', requireAuthAPI, upload.array('files', 100), async (req
     while (db.prepare('SELECT id FROM projects WHERE slug = ?').get(slug)) slug = generateSlug();
 
     const proj = db.prepare(
-      'INSERT INTO projects (user_id, title, description, slug, is_private, password, is_downloadable) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.session.userId, title.slice(0, 120), (description || '').slice(0, 500), slug, isPrivate ? 1 : 0, hashedPw, isDownloadable ? 1 : 0);
+      'INSERT INTO projects (user_id, title, description, slug, is_private, password, is_downloadable, last_accessed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.session.userId, title.slice(0, 120), (description || '').slice(0, 500), slug, isPrivate ? 1 : 0, hashedPw, isDownloadable ? 1 : 0, Math.floor(Date.now() / 1000));
 
-    const insertFile = db.prepare('INSERT INTO project_files (project_id, original_name, stored_name, size) VALUES (?, ?, ?, ?)');
-    req.files.forEach(f => insertFile.run(proj.lastInsertRowid, f.originalname, f.filename, f.size));
+    const insertFile = db.prepare('INSERT INTO project_files (project_id, original_name, stored_name, mime_type, size) VALUES (?, ?, ?, ?, ?)');
+    req.files.forEach(f => {
+      const mime = getMimeType(f.originalname);
+      insertFile.run(proj.lastInsertRowid, f.originalname, f.filename, mime, f.size);
+    });
 
     return res.json({ ok: true, slug });
   } catch (e) {
@@ -187,8 +237,7 @@ app.get('/api/projects/mine', requireAuthAPI, (req, res) => {
     const count = db.prepare('SELECT COUNT(*) as c FROM project_files WHERE project_id = ?').get(p.id);
     return {
       id: p.id, title: p.title, description: p.description, slug: p.slug,
-      is_private: !!p.is_private, is_downloadable: !!p.is_downloadable,
-      file_count: count.c
+      is_private: !!p.is_private, is_downloadable: !!p.is_downloadable, file_count: count.c
     };
   });
   return res.json(result);
@@ -226,14 +275,51 @@ app.get('/api/projects/:slug', async (req, res) => {
       }
     }
 
+    db.prepare('UPDATE projects SET last_accessed = ? WHERE id = ?').run(Math.floor(Date.now() / 1000), proj.id);
+
     const files = db.prepare('SELECT * FROM project_files WHERE project_id = ?').all(proj.id);
     return res.json({
       title: proj.title, description: proj.description, owner: proj.owner,
-      is_downloadable: !!proj.is_downloadable, slug: proj.slug,
-      files: files.map(f => ({ id: f.id, name: f.original_name, size_label: formatBytes(f.size) }))
+      is_downloadable: !!proj.is_downloadable, is_private: !!proj.is_private,
+      slug: proj.slug,
+      files: files.map(f => ({
+        id: f.id, name: f.original_name, size_label: formatBytes(f.size),
+        mime_type: f.mime_type || getMimeType(f.original_name),
+        is_text: isTextFile(f.original_name)
+      }))
     });
   } catch (e) {
     return res.status(500).json({ error: 'server error' });
+  }
+});
+
+app.get('/api/projects/:slug/file/:fileId/view', async (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ?').get(req.params.slug);
+    if (!proj) return res.status(404).send('not found');
+
+    if (proj.is_private) {
+      const isOwner = req.session.userId && Number(req.session.userId) === Number(proj.user_id);
+      if (!isOwner) {
+        const pw = req.query.password;
+        if (!pw) return res.status(401).send('unauthorized');
+        const match = await bcrypt.compare(pw, proj.password);
+        if (!match) return res.status(401).send('wrong password');
+      }
+    }
+
+    const file = db.prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ?').get(req.params.fileId, proj.id);
+    if (!file) return res.status(404).send('file not found');
+
+    const filePath = path.join(UPLOADS_DIR, file.stored_name);
+    if (!fs.existsSync(filePath)) return res.status(404).send('file not found');
+
+    const mime = file.mime_type || getMimeType(file.original_name);
+    res.setHeader('Content-Type', mime + '; charset=utf-8');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    fs.createReadStream(filePath).pipe(res);
+  } catch (e) {
+    return res.status(500).send('server error');
   }
 });
 
