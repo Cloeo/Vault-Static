@@ -275,10 +275,12 @@ nav {
 
 .proj-card-meta {
   font-size: 0.72rem;
-  color: var(--muted);
+  color: var(--muted2);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+  line-height: 1.6;
 }
 
 .proj-card-actions {
