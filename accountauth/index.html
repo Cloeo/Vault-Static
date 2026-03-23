@@ -8,15 +8,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
 </head>
 <body>
-
   <div id="bg-grid"></div>
   <div id="bg-glow"></div>
-
   <a href="/" id="logo">vault n drop</a>
 
   <div id="scene">
-    <div id="card-wrap">
+    <div id="auth-tabs">
+      <button class="auth-tab active" id="tab-register">create account</button>
+      <button class="auth-tab" id="tab-login">login</button>
+      <button class="auth-tab" id="tab-admin" style="color:var(--orange)">admin panel</button>
+    </div>
 
+    <div id="card-wrap">
       <div class="card" id="card-register">
         <h2 class="card-title">create account</h2>
         <p class="card-sub">start storing for free</p>
@@ -29,7 +32,6 @@
           <input type="password" id="reg-password" placeholder="create a password" />
         </div>
         <button class="btn-main" id="btn-register">create account</button>
-        <p class="switch-text">already have an account? <span class="switch-link" id="go-login">login here.</span></p>
       </div>
 
       <div class="card hidden-card" id="card-login">
@@ -44,14 +46,25 @@
           <input type="password" id="login-password" placeholder="your password" />
         </div>
         <button class="btn-main" id="btn-login">login to account</button>
-        <p class="switch-text">no account yet? <span class="switch-link" id="go-register">create one.</span></p>
       </div>
 
+      <div class="card hidden-card" id="card-admin">
+        <h2 class="card-title" style="font-size:1.3rem">admin panel</h2>
+        <p class="card-sub">restricted access</p>
+        <div class="field-group">
+          <label>admin username</label>
+          <input type="text" id="admin-username" autocomplete="off" spellcheck="false" placeholder="your website username" />
+        </div>
+        <div class="field-group">
+          <label>admin token</label>
+          <input type="text" id="admin-token" autocomplete="off" spellcheck="false" placeholder="vaultndrop-xxxxxxxxx" />
+        </div>
+        <button class="btn-main" id="btn-admin" style="background:#ff4d4d;color:#fff">sign in</button>
+      </div>
     </div>
   </div>
 
   <div id="toast"></div>
-
   <script src="auth.js"></script>
 </body>
 </html>
