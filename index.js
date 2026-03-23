@@ -32,6 +32,8 @@ db.exec(`
     is_private INTEGER DEFAULT 0,
     password TEXT DEFAULT NULL,
     is_downloadable INTEGER DEFAULT 0,
+    views INTEGER DEFAULT 0,
+    likes INTEGER DEFAULT 0,
     last_accessed INTEGER DEFAULT (strftime('%s','now')),
     created_at INTEGER DEFAULT (strftime('%s','now')),
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -45,9 +47,29 @@ db.exec(`
     size INTEGER DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES projects(id)
   );
+  CREATE TABLE IF NOT EXISTS project_likes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    UNIQUE(project_id, user_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS project_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at INTEGER DEFAULT (strftime('%s','now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
 
 try { db.exec(`ALTER TABLE projects ADD COLUMN last_accessed INTEGER DEFAULT (strftime('%s','now'));`); } catch (e) {}
+try { db.exec(`ALTER TABLE projects ADD COLUMN views INTEGER DEFAULT 0;`); } catch (e) {}
+try { db.exec(`ALTER TABLE projects ADD COLUMN likes INTEGER DEFAULT 0;`); } catch (e) {}
 try { db.exec(`ALTER TABLE project_files ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream';`); } catch (e) {}
 
 app.set('trust proxy', 1);
@@ -60,22 +82,13 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   name: 'vnd.sid',
-  cookie: {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 24 * 30
-  }
+  cookie: { httpOnly: true, secure: false, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 30 }
 }));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, crypto.randomBytes(16).toString('hex') + ext);
-  }
+  filename: (req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + path.extname(file.originalname))
 });
-
 const upload = multer({ storage, limits: { fileSize: 500 * 1024 * 1024 * 1024 } });
 
 function formatBytes(b) {
@@ -85,30 +98,24 @@ function formatBytes(b) {
   return (b / 1073741824).toFixed(2) + ' GB';
 }
 
-function generateSlug() {
-  return crypto.randomBytes(6).toString('hex');
-}
+function generateSlug() { return crypto.randomBytes(6).toString('hex'); }
 
 function getMimeType(filename) {
   const ext = path.extname(filename).toLowerCase();
   const map = {
-    '.txt': 'text/plain', '.md': 'text/plain', '.js': 'text/plain',
-    '.ts': 'text/plain', '.json': 'application/json', '.html': 'text/plain',
-    '.css': 'text/plain', '.py': 'text/plain', '.sh': 'text/plain',
-    '.log': 'text/plain', '.csv': 'text/plain', '.xml': 'text/plain',
-    '.yml': 'text/plain', '.yaml': 'text/plain', '.env': 'text/plain',
-    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-    '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg',
-    '.pdf': 'application/pdf'
+    '.txt':'text/plain','.md':'text/plain','.js':'text/plain','.ts':'text/plain',
+    '.json':'application/json','.html':'text/plain','.css':'text/plain','.py':'text/plain',
+    '.sh':'text/plain','.log':'text/plain','.csv':'text/plain','.xml':'text/plain',
+    '.yml':'text/plain','.yaml':'text/plain','.env':'text/plain','.png':'image/png',
+    '.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp',
+    '.svg':'image/svg+xml','.mp4':'video/mp4','.webm':'video/webm','.mp3':'audio/mpeg','.pdf':'application/pdf'
   };
   return map[ext] || 'application/octet-stream';
 }
 
 function isTextFile(filename) {
   const ext = path.extname(filename).toLowerCase();
-  const textExts = ['.txt','.md','.js','.ts','.json','.html','.css','.py','.sh','.log','.csv','.xml','.yml','.yaml','.env','.cfg','.ini','.rs','.go','.c','.cpp','.h','.java','.rb','.php','.swift','.kt'];
-  return textExts.includes(ext);
+  return ['.txt','.md','.js','.ts','.json','.html','.css','.py','.sh','.log','.csv','.xml','.yml','.yaml','.env','.cfg','.ini','.rs','.go','.c','.cpp','.h','.java','.rb','.php','.swift','.kt'].includes(ext);
 }
 
 function requireAuth(req, res, next) {
@@ -123,18 +130,16 @@ function requireAuthAPI(req, res, next) {
 
 function deleteProject(projectId) {
   const files = db.prepare('SELECT stored_name FROM project_files WHERE project_id = ?').all(projectId);
-  files.forEach(f => {
-    const fp = path.join(UPLOADS_DIR, f.stored_name);
-    if (fs.existsSync(fp)) fs.unlinkSync(fp);
-  });
+  files.forEach(f => { const fp = path.join(UPLOADS_DIR, f.stored_name); if (fs.existsSync(fp)) fs.unlinkSync(fp); });
   db.prepare('DELETE FROM project_files WHERE project_id = ?').run(projectId);
+  db.prepare('DELETE FROM project_likes WHERE project_id = ?').run(projectId);
+  db.prepare('DELETE FROM project_comments WHERE project_id = ?').run(projectId);
   db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
 }
 
 function runCleanup() {
   const cutoff = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
-  const stale = db.prepare('SELECT id FROM projects WHERE last_accessed < ?').all(cutoff);
-  stale.forEach(p => deleteProject(p.id));
+  db.prepare('SELECT id FROM projects WHERE last_accessed < ?').all(cutoff).forEach(p => deleteProject(p.id));
 }
 
 setInterval(runCleanup, 1000 * 60 * 60 * 6);
@@ -143,53 +148,33 @@ runCleanup();
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || username.trim().length < 2)
-      return res.status(400).json({ error: 'username must be at least 2 characters', field: 'username' });
-    if (!password || password.length < 6)
-      return res.status(400).json({ error: 'password must be at least 6 characters', field: 'password' });
-
+    if (!username || username.trim().length < 2) return res.status(400).json({ error: 'username must be at least 2 characters', field: 'username' });
+    if (!password || password.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters', field: 'password' });
     const clean = username.trim().slice(0, 32);
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(clean);
-    if (existing) return res.status(409).json({ error: 'that username is already taken', field: 'username' });
-
+    if (db.prepare('SELECT id FROM users WHERE username = ?').get(clean)) return res.status(409).json({ error: 'that username is already taken', field: 'username' });
     const hash = await bcrypt.hash(password, 10);
     const result = db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run(clean, hash);
     req.session.userId = result.lastInsertRowid;
     req.session.username = clean;
-    req.session.save((err) => {
-      if (err) return res.status(500).json({ error: 'session save failed' });
-      return res.json({ ok: true, username: clean });
-    });
-  } catch (e) {
-    return res.status(500).json({ error: 'server error' });
-  }
+    req.session.save(err => { if (err) return res.status(500).json({ error: 'session save failed' }); return res.json({ ok: true, username: clean }); });
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
 });
 
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'missing fields' });
-
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim());
     if (!user) return res.status(401).json({ error: 'username is wrong', field: 'username' });
-
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: 'password is wrong', field: 'password' });
-
     req.session.userId = user.id;
     req.session.username = user.username;
-    req.session.save((err) => {
-      if (err) return res.status(500).json({ error: 'session save failed' });
-      return res.json({ ok: true, username: user.username });
-    });
-  } catch (e) {
-    return res.status(500).json({ error: 'server error' });
-  }
+    req.session.save(err => { if (err) return res.status(500).json({ error: 'session save failed' }); return res.json({ ok: true, username: user.username }); });
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
 });
 
-app.post('/api/logout', (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
-});
+app.post('/api/logout', (req, res) => { req.session.destroy(() => res.json({ ok: true })); });
 
 app.get('/api/me', (req, res) => {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'not logged in' });
@@ -201,65 +186,44 @@ app.post('/api/projects', requireAuthAPI, upload.array('files', 100), async (req
     const { title, description, is_private, is_downloadable, password } = req.body;
     if (!title) return res.status(400).json({ error: 'title is required' });
     if (!req.files || !req.files.length) return res.status(400).json({ error: 'at least one file required' });
-
     const isPrivate = is_private === '1';
-    const isDownloadable = is_downloadable === '1';
     let hashedPw = null;
     if (isPrivate && password) hashedPw = await bcrypt.hash(password, 10);
-
     let slug = generateSlug();
     while (db.prepare('SELECT id FROM projects WHERE slug = ?').get(slug)) slug = generateSlug();
-
     const proj = db.prepare(
       'INSERT INTO projects (user_id, title, description, slug, is_private, password, is_downloadable, last_accessed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.session.userId, title.slice(0, 120), (description || '').slice(0, 500), slug, isPrivate ? 1 : 0, hashedPw, isDownloadable ? 1 : 0, Math.floor(Date.now() / 1000));
-
+    ).run(req.session.userId, title.slice(0, 120), (description || '').slice(0, 500), slug, isPrivate ? 1 : 0, hashedPw, is_downloadable === '1' ? 1 : 0, Math.floor(Date.now() / 1000));
     const insertFile = db.prepare('INSERT INTO project_files (project_id, original_name, stored_name, mime_type, size) VALUES (?, ?, ?, ?, ?)');
-    req.files.forEach(f => {
-      const mime = getMimeType(f.originalname);
-      insertFile.run(proj.lastInsertRowid, f.originalname, f.filename, mime, f.size);
-    });
-
+    req.files.forEach(f => insertFile.run(proj.lastInsertRowid, f.originalname, f.filename, getMimeType(f.originalname), f.size));
     return res.json({ ok: true, slug });
-  } catch (e) {
-    return res.status(500).json({ error: 'server error' });
-  }
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
 });
 
 app.get('/api/projects/mine', requireAuthAPI, (req, res) => {
   const projects = db.prepare('SELECT * FROM projects WHERE user_id = ? ORDER BY created_at DESC').all(req.session.userId);
-  const result = projects.map(p => {
+  return res.json(projects.map(p => {
     const count = db.prepare('SELECT COUNT(*) as c FROM project_files WHERE project_id = ?').get(p.id);
-    return {
-      id: p.id, title: p.title, description: p.description, slug: p.slug,
-      is_private: !!p.is_private, is_downloadable: !!p.is_downloadable, file_count: count.c
-    };
-  });
-  return res.json(result);
+    const likeCount = db.prepare('SELECT COUNT(*) as c FROM project_likes WHERE project_id = ?').get(p.id);
+    const commentCount = db.prepare('SELECT COUNT(*) as c FROM project_comments WHERE project_id = ?').get(p.id);
+    return { id: p.id, title: p.title, description: p.description, slug: p.slug, is_private: !!p.is_private, is_downloadable: !!p.is_downloadable, file_count: count.c, views: p.views || 0, likes: likeCount.c, comments: commentCount.c };
+  }));
 });
 
 app.get('/api/projects/public', (req, res) => {
-  const projects = db.prepare(
-    'SELECT p.*, u.username as owner FROM projects p JOIN users u ON p.user_id = u.id WHERE p.is_private = 0 ORDER BY p.created_at DESC LIMIT 50'
-  ).all();
-  const result = projects.map(p => {
+  const projects = db.prepare('SELECT p.*, u.username as owner FROM projects p JOIN users u ON p.user_id = u.id WHERE p.is_private = 0 ORDER BY p.created_at DESC LIMIT 50').all();
+  return res.json(projects.map(p => {
     const count = db.prepare('SELECT COUNT(*) as c FROM project_files WHERE project_id = ?').get(p.id);
-    return {
-      id: p.id, title: p.title, description: p.description, slug: p.slug,
-      owner: p.owner, is_downloadable: !!p.is_downloadable, file_count: count.c
-    };
-  });
-  return res.json(result);
+    const likeCount = db.prepare('SELECT COUNT(*) as c FROM project_likes WHERE project_id = ?').get(p.id);
+    const commentCount = db.prepare('SELECT COUNT(*) as c FROM project_comments WHERE project_id = ?').get(p.id);
+    return { id: p.id, title: p.title, description: p.description, slug: p.slug, owner: p.owner, is_downloadable: !!p.is_downloadable, file_count: count.c, views: p.views || 0, likes: likeCount.c, comments: commentCount.c };
+  }));
 });
 
 app.get('/api/projects/:slug', async (req, res) => {
   try {
-    const proj = db.prepare(
-      'SELECT p.*, u.username as owner FROM projects p JOIN users u ON p.user_id = u.id WHERE p.slug = ?'
-    ).get(req.params.slug);
-
+    const proj = db.prepare('SELECT p.*, u.username as owner FROM projects p JOIN users u ON p.user_id = u.id WHERE p.slug = ?').get(req.params.slug);
     if (!proj) return res.status(404).json({ error: 'not found' });
-
     if (proj.is_private) {
       const isOwner = req.session.userId && Number(req.session.userId) === Number(proj.user_id);
       if (!isOwner) {
@@ -269,30 +233,67 @@ app.get('/api/projects/:slug', async (req, res) => {
         if (!match) return res.status(401).json({ locked: true, error: 'wrong password' });
       }
     }
-
-    db.prepare('UPDATE projects SET last_accessed = ? WHERE id = ?').run(Math.floor(Date.now() / 1000), proj.id);
-
+    const isOwner = req.session.userId && Number(req.session.userId) === Number(proj.user_id);
+    if (!isOwner) {
+      db.prepare('UPDATE projects SET views = views + 1, last_accessed = ? WHERE id = ?').run(Math.floor(Date.now() / 1000), proj.id);
+    } else {
+      db.prepare('UPDATE projects SET last_accessed = ? WHERE id = ?').run(Math.floor(Date.now() / 1000), proj.id);
+    }
+    const likeCount = db.prepare('SELECT COUNT(*) as c FROM project_likes WHERE project_id = ?').get(proj.id);
+    const commentCount = db.prepare('SELECT COUNT(*) as c FROM project_comments WHERE project_id = ?').get(proj.id);
+    let userLiked = false;
+    if (req.session.userId) userLiked = !!db.prepare('SELECT id FROM project_likes WHERE project_id = ? AND user_id = ?').get(proj.id, req.session.userId);
+    const updatedProj = db.prepare('SELECT views FROM projects WHERE id = ?').get(proj.id);
     const files = db.prepare('SELECT * FROM project_files WHERE project_id = ?').all(proj.id);
     return res.json({
       title: proj.title, description: proj.description, owner: proj.owner,
-      is_downloadable: !!proj.is_downloadable, is_private: !!proj.is_private,
-      slug: proj.slug,
-      files: files.map(f => ({
-        id: f.id, name: f.original_name, size_label: formatBytes(f.size),
-        mime_type: f.mime_type || getMimeType(f.original_name),
-        is_text: isTextFile(f.original_name)
-      }))
+      is_downloadable: !!proj.is_downloadable, is_private: !!proj.is_private, slug: proj.slug,
+      views: updatedProj.views || 0, likes: likeCount.c, comments: commentCount.c,
+      user_liked: userLiked, is_owner: isOwner,
+      files: files.map(f => ({ id: f.id, name: f.original_name, size_label: formatBytes(f.size), mime_type: f.mime_type || getMimeType(f.original_name), is_text: isTextFile(f.original_name) }))
     });
-  } catch (e) {
-    return res.status(500).json({ error: 'server error' });
-  }
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.post('/api/projects/:slug/like', requireAuthAPI, (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ? AND is_private = 0').get(req.params.slug);
+    if (!proj) return res.status(404).json({ error: 'not found' });
+    const existing = db.prepare('SELECT id FROM project_likes WHERE project_id = ? AND user_id = ?').get(proj.id, req.session.userId);
+    if (existing) {
+      db.prepare('DELETE FROM project_likes WHERE project_id = ? AND user_id = ?').run(proj.id, req.session.userId);
+    } else {
+      db.prepare('INSERT INTO project_likes (project_id, user_id) VALUES (?, ?)').run(proj.id, req.session.userId);
+    }
+    const count = db.prepare('SELECT COUNT(*) as c FROM project_likes WHERE project_id = ?').get(proj.id);
+    return res.json({ ok: true, likes: count.c, liked: !existing });
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.get('/api/projects/:slug/comments', (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ?').get(req.params.slug);
+    if (!proj) return res.status(404).json({ error: 'not found' });
+    const comments = db.prepare('SELECT * FROM project_comments WHERE project_id = ? ORDER BY created_at ASC').all(proj.id);
+    return res.json(comments.map(c => ({ id: c.id, username: c.username, body: c.body, created_at: c.created_at })));
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.post('/api/projects/:slug/comments', requireAuthAPI, (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ? AND is_private = 0').get(req.params.slug);
+    if (!proj) return res.status(404).json({ error: 'not found or private' });
+    const body = (req.body.body || '').trim().slice(0, 500);
+    if (!body) return res.status(400).json({ error: 'comment cannot be empty' });
+    const result = db.prepare('INSERT INTO project_comments (project_id, user_id, username, body) VALUES (?, ?, ?, ?)').run(proj.id, req.session.userId, req.session.username, body);
+    return res.json({ ok: true, id: result.lastInsertRowid, username: req.session.username, body, created_at: Math.floor(Date.now() / 1000) });
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
 });
 
 app.get('/api/projects/:slug/file/:fileId/view', async (req, res) => {
   try {
     const proj = db.prepare('SELECT * FROM projects WHERE slug = ?').get(req.params.slug);
     if (!proj) return res.status(404).send('not found');
-
     if (proj.is_private) {
       const isOwner = req.session.userId && Number(req.session.userId) === Number(proj.user_id);
       if (!isOwner) {
@@ -302,39 +303,28 @@ app.get('/api/projects/:slug/file/:fileId/view', async (req, res) => {
         if (!match) return res.status(401).send('wrong password');
       }
     }
-
     const file = db.prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ?').get(req.params.fileId, proj.id);
     if (!file) return res.status(404).send('file not found');
-
     const filePath = path.join(UPLOADS_DIR, file.stored_name);
     if (!fs.existsSync(filePath)) return res.status(404).send('file not found');
-
-    const mime = file.mime_type || getMimeType(file.original_name);
-    res.setHeader('Content-Type', mime + '; charset=utf-8');
+    res.setHeader('Content-Type', (file.mime_type || getMimeType(file.original_name)) + '; charset=utf-8');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     fs.createReadStream(filePath).pipe(res);
-  } catch (e) {
-    return res.status(500).send('server error');
-  }
+  } catch (e) { return res.status(500).send('server error'); }
 });
 
 app.get('/api/projects/:slug/download/:fileId', async (req, res) => {
   try {
     const proj = db.prepare('SELECT * FROM projects WHERE slug = ?').get(req.params.slug);
     if (!proj || !proj.is_downloadable) return res.status(403).json({ error: 'not allowed' });
-
     if (proj.is_private) {
       const isOwner = req.session.userId && Number(req.session.userId) === Number(proj.user_id);
       if (!isOwner) return res.status(401).json({ error: 'unauthorized' });
     }
-
     const file = db.prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ?').get(req.params.fileId, proj.id);
     if (!file) return res.status(404).json({ error: 'file not found' });
-
     res.download(path.join(UPLOADS_DIR, file.stored_name), file.original_name);
-  } catch (e) {
-    return res.status(500).json({ error: 'server error' });
-  }
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
 });
 
 app.delete('/api/projects/:slug', requireAuthAPI, (req, res) => {
@@ -343,9 +333,7 @@ app.delete('/api/projects/:slug', requireAuthAPI, (req, res) => {
     if (!proj) return res.status(404).json({ error: 'not found or not yours' });
     deleteProject(proj.id);
     return res.json({ ok: true });
-  } catch (e) {
-    return res.status(500).json({ error: 'server error' });
-  }
+  } catch (e) { return res.status(500).json({ error: 'server error' }); }
 });
 
 app.get('/accountauth', (req, res) => res.sendFile(path.join(__dirname, 'accountauth.html')));
