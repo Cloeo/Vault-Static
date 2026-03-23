@@ -101,11 +101,20 @@ function buildMyCard(p) {
     <div class="proj-card-actions">
       <button class="proj-link-btn copy" data-link="${link}">copy link</button>
       <a class="proj-link-btn" href="/p/${p.slug}" target="_blank">open</a>
+      <button class="proj-link-btn delete-btn" data-slug="${p.slug}" style="color:#ff6b6b;border-color:rgba(255,77,77,0.2);">delete</button>
     </div>
   `;
   card.querySelector('.copy').addEventListener('click', function() {
     navigator.clipboard.writeText(this.dataset.link);
     showToast('link copied', 'success');
+  });
+  card.querySelector('.delete-btn').addEventListener('click', async function() {
+    if (!confirm('delete this project? this cannot be undone.')) return;
+    try {
+      const res = await fetch('/api/projects/' + this.dataset.slug, { method: 'DELETE', credentials: 'same-origin' });
+      if (res.ok) { showToast('project deleted', 'success'); loadMyProjects(); }
+      else showToast('could not delete', 'error');
+    } catch { showToast('could not delete', 'error'); }
   });
   return card;
 }
