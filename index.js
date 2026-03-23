@@ -473,6 +473,48 @@ app.delete('/api/projects/:slug', requireAuthAPI, (req, res) => {
   } catch(e) { return res.status(500).json({ error: 'server error' }); }
 });
 
+app.delete('/api/projects/:slug/file/:fileId', requireAuthAPI, (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ? AND user_id = ?').get(req.params.slug, req.session.userId);
+    if (!proj) return res.status(403).json({ error: 'not yours' });
+    const file = db.prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ?').get(req.params.fileId, proj.id);
+    if (!file) return res.status(404).json({ error: 'file not found' });
+    try { const fp = path.join(UPLOADS_DIR, file.stored_name); if (fs.existsSync(fp)) fs.unlinkSync(fp); } catch(e) {}
+    db.prepare('DELETE FROM project_files WHERE id = ?').run(file.id);
+    return res.json({ ok: true });
+  } catch(e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.get('/api/projects/:slug/file/:fileId/content', requireAuthAPI, async (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ? AND user_id = ?').get(req.params.slug, req.session.userId);
+    if (!proj) return res.status(403).json({ error: 'not yours' });
+    const file = db.prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ?').get(req.params.fileId, proj.id);
+    if (!file) return res.status(404).json({ error: 'file not found' });
+    if (!isTextFile(file.original_name)) return res.status(400).json({ error: 'not a text file' });
+    const filePath = path.join(UPLOADS_DIR, file.stored_name);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'file missing' });
+    const content = fs.readFileSync(filePath, 'utf8');
+    return res.json({ ok: true, content, name: file.original_name });
+  } catch(e) { return res.status(500).json({ error: 'server error' }); }
+});
+
+app.put('/api/projects/:slug/file/:fileId/content', requireAuthAPI, (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ? AND user_id = ?').get(req.params.slug, req.session.userId);
+    if (!proj) return res.status(403).json({ error: 'not yours' });
+    const file = db.prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ?').get(req.params.fileId, proj.id);
+    if (!file) return res.status(404).json({ error: 'file not found' });
+    if (!isTextFile(file.original_name)) return res.status(400).json({ error: 'not editable' });
+    const content = req.body.content;
+    if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
+    const filePath = path.join(UPLOADS_DIR, file.stored_name);
+    fs.writeFileSync(filePath, content, 'utf8');
+    db.prepare('UPDATE project_files SET size = ? WHERE id = ?').run(Buffer.byteLength(content, 'utf8'), file.id);
+    return res.json({ ok: true });
+  } catch(e) { return res.status(500).json({ error: 'server error' }); }
+});
+
 app.get('/accountauth', (req, res) => res.sendFile(path.join(__dirname, 'accountauth.html')));
 app.get('/projectstorage', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'projectstorage.html')));
 app.get('/adminpanel', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
