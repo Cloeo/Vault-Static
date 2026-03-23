@@ -47,13 +47,8 @@ db.exec(`
   );
 `);
 
-db.exec(`
-  ALTER TABLE projects ADD COLUMN last_accessed INTEGER DEFAULT (strftime('%s','now'));
-`);
-
-db.exec(`
-  ALTER TABLE project_files ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream';
-`);
+try { db.exec(`ALTER TABLE projects ADD COLUMN last_accessed INTEGER DEFAULT (strftime('%s','now'));`); } catch (e) {}
+try { db.exec(`ALTER TABLE project_files ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream';`); } catch (e) {}
 
 app.set('trust proxy', 1);
 app.use(express.json());
@@ -337,6 +332,17 @@ app.get('/api/projects/:slug/download/:fileId', async (req, res) => {
     if (!file) return res.status(404).json({ error: 'file not found' });
 
     res.download(path.join(UPLOADS_DIR, file.stored_name), file.original_name);
+  } catch (e) {
+    return res.status(500).json({ error: 'server error' });
+  }
+});
+
+app.delete('/api/projects/:slug', requireAuthAPI, (req, res) => {
+  try {
+    const proj = db.prepare('SELECT * FROM projects WHERE slug = ? AND user_id = ?').get(req.params.slug, req.session.userId);
+    if (!proj) return res.status(404).json({ error: 'not found or not yours' });
+    deleteProject(proj.id);
+    return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ error: 'server error' });
   }
