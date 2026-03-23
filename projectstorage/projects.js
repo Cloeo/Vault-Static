@@ -253,7 +253,7 @@ chkPrivate.addEventListener('change', () => {
   }
 });
 
-btnPublish.addEventListener('click', async () => {
+btnPublish.addEventListener('click', () => {
   const title = document.getElementById('proj-title').value.trim();
   const desc = document.getElementById('proj-desc').value.trim();
   const isPrivate = chkPrivate.checked;
@@ -265,7 +265,7 @@ btnPublish.addEventListener('click', async () => {
   if (isPrivate && !password) { showToast('set a password for private project', 'error'); return; }
 
   btnPublish.disabled = true;
-  btnPublish.textContent = 'publishing...';
+  btnPublish.textContent = 'uploading...';
 
   const form = new FormData();
   form.append('title', title);
@@ -275,22 +275,53 @@ btnPublish.addEventListener('click', async () => {
   if (isPrivate) form.append('password', password);
   selectedFiles.forEach(f => form.append('files', f));
 
-  try {
-    const res = await fetch('/api/projects', { method: 'POST', body: form, credentials: 'same-origin' });
-    const data = await res.json();
-    if (res.ok) {
-      showToast('project published', 'success');
-      closeModal();
-      loadMyProjects();
-    } else {
-      showToast(data.error || 'publish failed', 'error');
-    }
-  } catch {
-    showToast('could not connect to server', 'error');
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/projects');
+  xhr.withCredentials = true;
+
+  let progressBar = document.getElementById('upload-progress');
+  if (!progressBar) {
+    progressBar = document.createElement('div');
+    progressBar.id = 'upload-progress';
+    progressBar.style.cssText = 'height:2px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:8px;';
+    progressBar.innerHTML = '<div id="upload-bar" style="height:100%;width:0%;background:var(--green);transition:width 0.2s;border-radius:2px;"></div>';
+    btnPublish.parentNode.insertBefore(progressBar, btnPublish);
   }
 
-  btnPublish.disabled = false;
-  btnPublish.textContent = 'publish project';
+  xhr.upload.addEventListener('progress', (e) => {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      document.getElementById('upload-bar').style.width = pct + '%';
+      btnPublish.textContent = 'uploading ' + pct + '%...';
+    }
+  });
+
+  xhr.addEventListener('load', () => {
+    progressBar.remove();
+    try {
+      const data = JSON.parse(xhr.responseText);
+      if (xhr.status === 200 && data.ok) {
+        showToast('project published', 'success');
+        closeModal();
+        loadMyProjects();
+      } else {
+        showToast(data.error || 'publish failed', 'error');
+      }
+    } catch (e) {
+      showToast('server error', 'error');
+    }
+    btnPublish.disabled = false;
+    btnPublish.textContent = 'publish project';
+  });
+
+  xhr.addEventListener('error', () => {
+    if (progressBar.parentNode) progressBar.remove();
+    showToast('upload failed — check your connection', 'error');
+    btnPublish.disabled = false;
+    btnPublish.textContent = 'publish project';
+  });
+
+  xhr.send(form);
 });
 
 btnLogout.addEventListener('click', async () => {
