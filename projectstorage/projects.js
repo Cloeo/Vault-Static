@@ -97,7 +97,7 @@ function buildMyCard(p) {
       <span>${p.file_count} file${p.file_count !== 1 ? 's' : ''}</span>
       <span>·</span>
       <span>${p.is_downloadable ? 'downloadable' : 'view only'}</span>
-      ${p.instant_download ? '<span>·</span><span style="color:#ff8c42">instant dl</span>' : ''}
+      ${p.instant_download ? '<span>·</span><span style="color:#ff8c42;font-weight:500">instant dl</span>' : ''}
       <span>·</span>
       <span>${p.views || 0} views</span>
       <span>·</span>
