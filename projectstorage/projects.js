@@ -1,12 +1,15 @@
 let currentUser = null;
 let selectedFiles = [];
 let toastTimer = null;
+let editingFile = null;
+let editingSlug = null;
 
 const modalOverlay = document.getElementById('modal-overlay');
 const btnNewProject = document.getElementById('btn-new-project');
 const modalClose = document.getElementById('modal-close');
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
+const fileInputSingle = document.getElementById('file-input-single');
 const fileList = document.getElementById('file-list');
 const chkPrivate = document.getElementById('chk-private');
 const passwordField = document.getElementById('password-field');
@@ -23,6 +26,12 @@ const viewPublic = document.getElementById('view-public');
 const sidebarUsername = document.getElementById('sidebar-username');
 const btnLogout = document.getElementById('btn-logout');
 const toast = document.getElementById('toast');
+const editModalOverlay = document.getElementById('edit-modal-overlay');
+const editModalClose = document.getElementById('edit-modal-close');
+const editTextarea = document.getElementById('edit-textarea');
+const editSave = document.getElementById('edit-save');
+const editCancel = document.getElementById('edit-cancel');
+const editModalFilename = document.getElementById('edit-modal-filename');
 
 function showToast(msg, type) {
   clearTimeout(toastTimer);
@@ -36,6 +45,16 @@ function formatBytes(bytes) {
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
   if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
   return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+function esc(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function isEditable(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return ['txt','md','js','ts','json','html','css','py','sh','log','csv','xml','yml','yaml','env','cfg','ini','rs','go','c','cpp','h','java','rb','php','swift','kt'].includes(ext);
 }
 
 async function init() {
@@ -56,15 +75,10 @@ async function loadMyProjects() {
     const res = await fetch('/api/projects/mine', { credentials: 'same-origin' });
     const data = await res.json();
     projectsGrid.innerHTML = '';
-    if (!data.length) {
-      emptyState.classList.add('show');
-      return;
-    }
+    if (!data.length) { emptyState.classList.add('show'); return; }
     emptyState.classList.remove('show');
     data.forEach(p => projectsGrid.appendChild(buildMyCard(p)));
-  } catch {
-    showToast('could not load projects', 'error');
-  }
+  } catch { showToast('could not load projects', 'error'); }
 }
 
 async function loadPublicProjects() {
@@ -72,15 +86,10 @@ async function loadPublicProjects() {
     const res = await fetch('/api/projects/public', { credentials: 'same-origin' });
     const data = await res.json();
     publicGrid.innerHTML = '';
-    if (!data.length) {
-      publicEmpty.classList.add('show');
-      return;
-    }
+    if (!data.length) { publicEmpty.classList.add('show'); return; }
     publicEmpty.classList.remove('show');
     data.forEach(p => publicGrid.appendChild(buildPublicCard(p)));
-  } catch {
-    showToast('could not load public projects', 'error');
-  }
+  } catch { showToast('could not load public projects', 'error'); }
 }
 
 function buildMyCard(p) {
@@ -140,6 +149,10 @@ function buildPublicCard(p) {
       <span>by ${esc(p.owner)}</span>
       <span>·</span>
       <span>${p.file_count} file${p.file_count !== 1 ? 's' : ''}</span>
+      <span>·</span>
+      <span>${p.views || 0} views</span>
+      <span>·</span>
+      <span>${p.likes || 0} likes</span>
     </div>
     <div class="proj-card-actions">
       <button class="proj-link-btn copy" data-link="${link}">copy link</button>
@@ -153,76 +166,101 @@ function buildPublicCard(p) {
   return card;
 }
 
-function esc(str) {
-  if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 navStorage.addEventListener('click', (e) => {
   e.preventDefault();
-  navStorage.classList.add('active');
-  navPublic.classList.remove('active');
-  viewStorage.classList.add('active');
-  viewPublic.classList.remove('active');
+  navStorage.classList.add('active'); navPublic.classList.remove('active');
+  viewStorage.classList.add('active'); viewPublic.classList.remove('active');
   loadMyProjects();
 });
 
 navPublic.addEventListener('click', (e) => {
   e.preventDefault();
-  navPublic.classList.add('active');
-  navStorage.classList.remove('active');
-  viewPublic.classList.add('active');
-  viewStorage.classList.remove('active');
+  navPublic.classList.add('active'); navStorage.classList.remove('active');
+  viewPublic.classList.add('active'); viewStorage.classList.remove('active');
   loadPublicProjects();
 });
 
-btnNewProject.addEventListener('click', () => {
-  modalOverlay.classList.add('open');
-});
-
+btnNewProject.addEventListener('click', () => { modalOverlay.classList.add('open'); });
 modalClose.addEventListener('click', closeModal);
-
-modalOverlay.addEventListener('click', (e) => {
-  if (e.target === modalOverlay) closeModal();
-});
+modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
 
 function closeModal() {
   modalOverlay.classList.remove('open');
   selectedFiles = [];
   fileList.innerHTML = '';
   fileInput.value = '';
+  fileInputSingle.value = '';
   document.getElementById('proj-title').value = '';
   document.getElementById('proj-desc').value = '';
   document.getElementById('proj-password').value = '';
   chkPrivate.checked = false;
   chkDownload.checked = false;
+  document.getElementById('chk-instant').checked = false;
   passwordField.classList.add('hidden');
 }
 
-dropZone.addEventListener('dragover', (e) => {
+async function getFilesFromEntry(entry, path) {
+  path = path || '';
+  if (entry.isFile) {
+    return new Promise(resolve => {
+      entry.file(file => {
+        Object.defineProperty(file, 'webkitRelativePath', { value: path + file.name });
+        resolve([file]);
+      });
+    });
+  } else if (entry.isDirectory) {
+    const reader = entry.createReader();
+    const allEntries = await new Promise(resolve => {
+      const results = [];
+      function readBatch() {
+        reader.readEntries(entries => {
+          if (!entries.length) { resolve(results); return; }
+          results.push(...entries);
+          readBatch();
+        });
+      }
+      readBatch();
+    });
+    const nested = await Promise.all(allEntries.map(e => getFilesFromEntry(e, path + entry.name + '/')));
+    return nested.flat();
+  }
+  return [];
+}
+
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('over'); });
+
+dropZone.addEventListener('drop', async (e) => {
   e.preventDefault();
-  dropZone.classList.add('over');
-});
-
-dropZone.addEventListener('dragleave', () => {
   dropZone.classList.remove('over');
+  const items = [...e.dataTransfer.items];
+  const allFiles = [];
+  for (const item of items) {
+    if (item.webkitGetAsEntry) {
+      const entry = item.webkitGetAsEntry();
+      if (entry) {
+        const files = await getFilesFromEntry(entry, '');
+        allFiles.push(...files);
+        continue;
+      }
+    }
+    const f = item.getAsFile();
+    if (f) allFiles.push(f);
+  }
+  addFiles(allFiles);
 });
 
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('over');
-  addFiles([...e.dataTransfer.files]);
+dropZone.addEventListener('click', (e) => {
+  if (e.target === fileInput || e.target === fileInputSingle) return;
+  fileInputSingle.click();
 });
 
-fileInput.addEventListener('change', () => {
-  addFiles([...fileInput.files]);
-});
+fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); });
+fileInputSingle.addEventListener('change', () => { addFiles([...fileInputSingle.files]); });
 
 function addFiles(files) {
   files.forEach(f => {
-    if (!selectedFiles.find(x => x.name === f.name && x.size === f.size)) {
-      selectedFiles.push(f);
-    }
+    if (!selectedFiles.find(x => x.name === f.name && x.size === f.size)) selectedFiles.push(f);
   });
   renderFileList();
 }
@@ -235,22 +273,69 @@ function renderFileList() {
     item.innerHTML = `
       <span class="file-item-name">${esc(f.name)}</span>
       <span class="file-item-size">${formatBytes(f.size)}</span>
-      <button class="file-item-remove" data-i="${i}">✕</button>
+      <div class="file-item-hover-actions">
+        ${isEditable(f.name) ? `<button class="file-hover-btn edit-pending" data-i="${i}">edit</button>` : ''}
+        <button class="file-hover-btn del remove-pending" data-i="${i}">remove</button>
+      </div>
+      <button class="file-item-remove" data-i="${i}" style="opacity:0;pointer-events:none">✕</button>
     `;
-    item.querySelector('.file-item-remove').addEventListener('click', function() {
+    item.querySelector('.remove-pending').addEventListener('click', function() {
       selectedFiles.splice(+this.dataset.i, 1);
       renderFileList();
     });
+    const editBtn = item.querySelector('.edit-pending');
+    if (editBtn) {
+      editBtn.addEventListener('click', function() {
+        const idx = +this.dataset.i;
+        const file = selectedFiles[idx];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          editTextarea.value = e.target.result;
+          editModalFilename.textContent = file.name;
+          editingFile = { idx, file };
+          editingSlug = null;
+          editModalOverlay.classList.add('open');
+        };
+        reader.readAsText(file);
+      });
+    }
     fileList.appendChild(item);
   });
 }
 
 chkPrivate.addEventListener('change', () => {
-  if (chkPrivate.checked) {
-    passwordField.classList.remove('hidden');
-  } else {
-    passwordField.classList.add('hidden');
-    document.getElementById('proj-password').value = '';
+  if (chkPrivate.checked) passwordField.classList.remove('hidden');
+  else { passwordField.classList.add('hidden'); document.getElementById('proj-password').value = ''; }
+});
+
+editModalClose.addEventListener('click', () => { editModalOverlay.classList.remove('open'); editingFile = null; editingSlug = null; });
+editCancel.addEventListener('click', () => { editModalOverlay.classList.remove('open'); editingFile = null; editingSlug = null; });
+editModalOverlay.addEventListener('click', (e) => { if (e.target === editModalOverlay) { editModalOverlay.classList.remove('open'); editingFile = null; editingSlug = null; } });
+
+editSave.addEventListener('click', async () => {
+  const content = editTextarea.value;
+  if (editingFile && editingFile.idx !== undefined) {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const newFile = new File([blob], editingFile.file.name, { type: 'text/plain' });
+    selectedFiles[editingFile.idx] = newFile;
+    renderFileList();
+    editModalOverlay.classList.remove('open');
+    editingFile = null;
+    showToast('file updated', 'success');
+  } else if (editingSlug && editingFile) {
+    editSave.disabled = true;
+    editSave.textContent = 'saving...';
+    try {
+      const res = await fetch('/api/projects/' + editingSlug + '/file/' + editingFile.id + '/content', {
+        method: 'PUT', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      });
+      if (res.ok) { showToast('file saved', 'success'); editModalOverlay.classList.remove('open'); editingFile = null; editingSlug = null; }
+      else showToast('save failed', 'error');
+    } catch { showToast('save failed', 'error'); }
+    editSave.disabled = false;
+    editSave.textContent = 'save changes';
   }
 });
 
@@ -299,19 +384,12 @@ btnPublish.addEventListener('click', () => {
   });
 
   xhr.addEventListener('load', () => {
-    progressBar.remove();
+    if (progressBar.parentNode) progressBar.remove();
     try {
       const data = JSON.parse(xhr.responseText);
-      if (xhr.status === 200 && data.ok) {
-        showToast('project published', 'success');
-        closeModal();
-        loadMyProjects();
-      } else {
-        showToast(data.error || 'publish failed', 'error');
-      }
-    } catch (e) {
-      showToast('server error', 'error');
-    }
+      if (xhr.status === 200 && data.ok) { showToast('project published', 'success'); closeModal(); loadMyProjects(); }
+      else showToast(data.error || 'publish failed', 'error');
+    } catch { showToast('server error', 'error'); }
     btnPublish.disabled = false;
     btnPublish.textContent = 'publish project';
   });
