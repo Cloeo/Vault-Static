@@ -120,14 +120,29 @@ function buildMyCard(p) {
     </div>
     <div class="proj-card-actions">
       <button class="proj-link-btn copy" data-link="${link}">copy link</button>
-      <a class="proj-link-btn" href="/p/${p.slug}" target="_blank">open</a>
-      <button class="proj-link-btn delete-btn" data-slug="${p.slug}" style="color:#ff6b6b;border-color:rgba(255,77,77,0.2);">delete</button>
+      <a class="proj-link-btn open-btn" href="/p/${p.slug}" target="_blank">open</a>
+      ${p.roblox ? `<button class="proj-link-btn roblox-copy" data-slug="${p.slug}">copy link · roblox</button>` : ''}
+      <button class="proj-link-btn delete-btn" data-slug="${p.slug}">delete</button>
     </div>
   `;
   card.querySelector('.copy').addEventListener('click', function() {
     navigator.clipboard.writeText(this.dataset.link);
     showToast('link copied', 'success');
   });
+  if (p.roblox) {
+    card.querySelector('.roblox-copy').addEventListener('click', async function() {
+      const slug = this.dataset.slug;
+      try {
+        const res = await fetch('/api/projects/' + slug, { credentials: 'same-origin' });
+        const data = await res.json();
+        if (!data.files || !data.files.length) { showToast('no files in project', 'error'); return; }
+        const f = data.files[0];
+        const rawUrl = window.location.origin + '/api/projects/' + slug + '/file/' + f.id + '/view';
+        navigator.clipboard.writeText(rawUrl);
+        showToast('roblox link copied', 'success');
+      } catch { showToast('could not get link', 'error'); }
+    });
+  }
   card.querySelector('.delete-btn').addEventListener('click', async function() {
     if (!confirm('delete this project? this cannot be undone.')) return;
     try {
@@ -201,6 +216,7 @@ function closeModal() {
   chkPrivate.checked = false;
   chkDownload.checked = false;
   document.getElementById('chk-instant').checked = false;
+  document.getElementById('chk-roblox').checked = false;
   passwordField.classList.add('hidden');
 }
 
@@ -377,6 +393,7 @@ btnPublish.addEventListener('click', () => {
   form.append('is_private', isPrivate ? '1' : '0');
   form.append('is_downloadable', isDownloadable ? '1' : '0');
   form.append('instant_download', document.getElementById('chk-instant').checked ? '1' : '0');
+  form.append('roblox', document.getElementById('chk-roblox').checked ? '1' : '0');
   if (isPrivate) form.append('password', password);
   selectedFiles.forEach(f => form.append('files', f));
 
