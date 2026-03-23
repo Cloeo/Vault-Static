@@ -3,6 +3,8 @@ let selectedFiles = [];
 let toastTimer = null;
 let editingFile = null;
 let editingSlug = null;
+let isUploading = false;
+let currentUploadName = '';
 
 const modalOverlay = document.getElementById('modal-overlay');
 const btnNewProject = document.getElementById('btn-new-project');
@@ -32,6 +34,8 @@ const editTextarea = document.getElementById('edit-textarea');
 const editSave = document.getElementById('edit-save');
 const editCancel = document.getElementById('edit-cancel');
 const editModalFilename = document.getElementById('edit-modal-filename');
+const btnBrowseFiles = document.getElementById('btn-browse-files');
+const btnBrowseFolder = document.getElementById('btn-browse-folder');
 
 function showToast(msg, type) {
   clearTimeout(toastTimer);
@@ -185,6 +189,7 @@ modalClose.addEventListener('click', closeModal);
 modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
 
 function closeModal() {
+  if (isUploading) return;
   modalOverlay.classList.remove('open');
   selectedFiles = [];
   fileList.innerHTML = '';
@@ -233,16 +238,13 @@ dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('over')
 dropZone.addEventListener('drop', async (e) => {
   e.preventDefault();
   dropZone.classList.remove('over');
+  if (isUploading) { showToast('wait for ' + currentUploadName + ' to upload first.', 'error'); return; }
   const items = [...e.dataTransfer.items];
   const allFiles = [];
   for (const item of items) {
     if (item.webkitGetAsEntry) {
       const entry = item.webkitGetAsEntry();
-      if (entry) {
-        const files = await getFilesFromEntry(entry, '');
-        allFiles.push(...files);
-        continue;
-      }
+      if (entry) { const files = await getFilesFromEntry(entry, ''); allFiles.push(...files); continue; }
     }
     const f = item.getAsFile();
     if (f) allFiles.push(f);
@@ -250,13 +252,27 @@ dropZone.addEventListener('drop', async (e) => {
   addFiles(allFiles);
 });
 
-dropZone.addEventListener('click', (e) => {
-  if (e.target === fileInput || e.target === fileInputSingle) return;
+btnBrowseFiles.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (isUploading) { showToast('wait for ' + currentUploadName + ' to upload first.', 'error'); return; }
   fileInputSingle.click();
 });
 
-fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); });
-fileInputSingle.addEventListener('change', () => { addFiles([...fileInputSingle.files]); });
+btnBrowseFolder.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (isUploading) { showToast('wait for ' + currentUploadName + ' to upload first.', 'error'); return; }
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', () => {
+  if (isUploading) { showToast('wait for ' + currentUploadName + ' to upload first.', 'error'); fileInput.value = ''; return; }
+  addFiles([...fileInput.files]);
+});
+
+fileInputSingle.addEventListener('change', () => {
+  if (isUploading) { showToast('wait for ' + currentUploadName + ' to upload first.', 'error'); fileInputSingle.value = ''; return; }
+  addFiles([...fileInputSingle.files]);
+});
 
 function addFiles(files) {
   files.forEach(f => {
@@ -352,6 +368,8 @@ btnPublish.addEventListener('click', () => {
 
   btnPublish.disabled = true;
   btnPublish.textContent = 'uploading...';
+  isUploading = true;
+  currentUploadName = selectedFiles[0] ? selectedFiles[0].name : title;
 
   const form = new FormData();
   form.append('title', title);
@@ -385,6 +403,8 @@ btnPublish.addEventListener('click', () => {
 
   xhr.addEventListener('load', () => {
     if (progressBar.parentNode) progressBar.remove();
+    isUploading = false;
+    currentUploadName = '';
     try {
       const data = JSON.parse(xhr.responseText);
       if (xhr.status === 200 && data.ok) { showToast('project published', 'success'); closeModal(); loadMyProjects(); }
@@ -396,6 +416,8 @@ btnPublish.addEventListener('click', () => {
 
   xhr.addEventListener('error', () => {
     if (progressBar.parentNode) progressBar.remove();
+    isUploading = false;
+    currentUploadName = '';
     showToast('upload failed — check your connection', 'error');
     btnPublish.disabled = false;
     btnPublish.textContent = 'publish project';
