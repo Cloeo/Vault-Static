@@ -14,53 +14,51 @@
 
   <div id="scene">
     <div id="auth-tabs">
-      <button class="auth-tab active" id="tab-register">create account</button>
-      <button class="auth-tab" id="tab-login">login</button>
-      <button class="auth-tab" id="tab-admin" style="color:var(--orange)">admin panel</button>
+      <button class="auth-tab active" data-target="card-register">create account</button>
+      <button class="auth-tab" data-target="card-login">login</button>
+      <button class="auth-tab admin-tab" data-target="card-admin">admin panel</button>
     </div>
 
-    <div id="card-wrap">
-      <div class="card" id="card-register">
-        <h2 class="card-title">create account</h2>
-        <p class="card-sub">start storing for free</p>
-        <div class="field-group">
-          <label>username</label>
-          <input type="text" id="reg-username" autocomplete="off" spellcheck="false" placeholder="pick a username" />
-        </div>
-        <div class="field-group">
-          <label>password</label>
-          <input type="password" id="reg-password" placeholder="create a password" />
-        </div>
-        <button class="btn-main" id="btn-register">create account</button>
+    <div id="card-register" class="auth-card active-card">
+      <h2 class="card-title">create account</h2>
+      <p class="card-sub">start storing for free</p>
+      <div class="field-group">
+        <label>username</label>
+        <input type="text" id="reg-username" autocomplete="off" spellcheck="false" placeholder="pick a username" />
       </div>
+      <div class="field-group">
+        <label>password</label>
+        <input type="password" id="reg-password" placeholder="create a password" />
+      </div>
+      <button class="btn-main green-btn" id="btn-register">create account</button>
+    </div>
 
-      <div class="card hidden-card" id="card-login">
-        <h2 class="card-title">welcome back</h2>
-        <p class="card-sub">sign in to your vault</p>
-        <div class="field-group">
-          <label>username</label>
-          <input type="text" id="login-username" autocomplete="off" spellcheck="false" placeholder="your username" />
-        </div>
-        <div class="field-group">
-          <label>password</label>
-          <input type="password" id="login-password" placeholder="your password" />
-        </div>
-        <button class="btn-main" id="btn-login">login to account</button>
+    <div id="card-login" class="auth-card">
+      <h2 class="card-title">welcome back</h2>
+      <p class="card-sub">sign in to your vault</p>
+      <div class="field-group">
+        <label>username</label>
+        <input type="text" id="login-username" autocomplete="off" spellcheck="false" placeholder="your username" />
       </div>
+      <div class="field-group">
+        <label>password</label>
+        <input type="password" id="login-password" placeholder="your password" />
+      </div>
+      <button class="btn-main green-btn" id="btn-login">login to account</button>
+    </div>
 
-      <div class="card hidden-card" id="card-admin">
-        <h2 class="card-title" style="font-size:1.3rem">admin panel</h2>
-        <p class="card-sub">restricted access</p>
-        <div class="field-group">
-          <label>admin username</label>
-          <input type="text" id="admin-username" autocomplete="off" spellcheck="false" placeholder="your website username" />
-        </div>
-        <div class="field-group">
-          <label>admin token</label>
-          <input type="text" id="admin-token" autocomplete="off" spellcheck="false" placeholder="vaultndrop-xxxxxxxxx" />
-        </div>
-        <button class="btn-main" id="btn-admin" style="background:#ff4d4d;color:#fff">sign in</button>
+    <div id="card-admin" class="auth-card">
+      <h2 class="card-title" style="font-size:1.35rem">admin panel</h2>
+      <p class="card-sub">restricted access only</p>
+      <div class="field-group">
+        <label>admin username</label>
+        <input type="text" id="admin-username" autocomplete="off" spellcheck="false" placeholder="your website username" />
       </div>
+      <div class="field-group">
+        <label>admin token</label>
+        <input type="text" id="admin-token-input" autocomplete="off" spellcheck="false" placeholder="vaultndrop-xxxxxxxxx" />
+      </div>
+      <button class="btn-main red-btn" id="btn-admin">sign in</button>
     </div>
   </div>
 
