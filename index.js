@@ -273,10 +273,8 @@ app.delete('/api/admin/tokens/:id', requireAdminAPI, (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/api/bot/create-admin', (req, res) => {
+app.post('/api/bot/create-admin-open', (req, res) => {
   try {
-    const botSecret = req.headers['x-bot-secret'];
-    if (!botSecret || botSecret !== process.env.BOT_SECRET) return res.status(401).json({ error: 'unauthorized' });
     const { website_username } = req.body;
     if (!website_username) return res.status(400).json({ error: 'website_username required' });
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(website_username.trim());
@@ -285,12 +283,12 @@ app.post('/api/bot/create-admin', (req, res) => {
   } catch(e) { return res.status(500).json({ error: 'server error' }); }
 });
 
-app.post('/api/bot/gift-code', (req, res) => {
+app.post('/api/bot/gift-code-open', (req, res) => {
   try {
-    const botSecret = req.headers['x-bot-secret'];
-    if (!botSecret || botSecret !== process.env.BOT_SECRET) return res.status(401).json({ error: 'unauthorized' });
     const { website_username } = req.body;
     if (!website_username) return res.status(400).json({ error: 'website_username required' });
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(website_username.trim());
+    if (!user) return res.status(404).json({ error: 'user not found on site' });
     let code = generateAdminCode();
     while (db.prepare('SELECT id FROM admin_tokens WHERE code = ?').get(code)) code = generateAdminCode();
     db.prepare('INSERT INTO admin_tokens (website_username, code) VALUES (?, ?)').run(website_username.trim(), code);
