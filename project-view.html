@@ -103,8 +103,26 @@
     #confirm-delete { flex: 1; background: var(--red); color: #fff; border: none; border-radius: 100px; padding: 11px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: background 0.2s; }
     #confirm-delete:hover { background: #ff6b6b; }
 
-    #not-found { padding: 80px 0; text-align: center; color: var(--muted); }
-    #not-found h2 { font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 800; margin-bottom: 12px; color: var(--text); }
+    .file-row-owner-actions { display: flex; gap: 6px; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+    .file-row:hover .file-row-owner-actions { opacity: 1; pointer-events: all; }
+    .file-hover-btn { background: #1a1a1a; border: 1px solid var(--border2); color: var(--muted2); border-radius: 6px; padding: 3px 10px; font-size: 0.7rem; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: color 0.2s, border-color 0.2s; white-space: nowrap; }
+    .file-hover-btn:hover { color: var(--text); border-color: var(--muted); }
+    .file-hover-btn.del { border-color: rgba(255,77,77,0.2); color: rgba(255,77,77,0.7); }
+    .file-hover-btn.del:hover { border-color: var(--red); color: var(--red); }
+    #file-editor-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 600; display: flex; align-items: center; justify-content: center; padding: 40px 20px; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+    #file-editor-overlay.open { opacity: 1; pointer-events: all; }
+    #file-editor-box { background: #0c0c0c; border: 1px solid var(--border2); border-radius: 14px; width: 100%; max-width: 860px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; transform: translateY(12px); transition: transform 0.25s cubic-bezier(0.16,1,0.3,1); }
+    #file-editor-overlay.open #file-editor-box { transform: translateY(0); }
+    #file-editor-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #file-editor-name { font-size: 0.82rem; color: var(--muted2); }
+    #file-editor-close { background: none; border: none; color: var(--muted); font-size: 1rem; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: color 0.2s; }
+    #file-editor-close:hover { color: var(--text); }
+    #file-editor-textarea { flex: 1; background: transparent; border: none; outline: none; resize: none; padding: 24px; font-family: 'Courier New', monospace; font-size: 0.82rem; color: #ccc; line-height: 1.75; min-height: 340px; }
+    #file-editor-footer { display: flex; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    #file-editor-cancel { background: none; border: 1px solid var(--border2); color: var(--muted2); border-radius: 100px; padding: 9px 20px; font-family: 'DM Sans', sans-serif; font-size: 0.8rem; cursor: pointer; transition: color 0.2s; }
+    #file-editor-cancel:hover { color: var(--text); }
+    #file-editor-save { background: var(--green); color: #000; border: none; border-radius: 100px; padding: 9px 24px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.8rem; cursor: pointer; transition: background 0.2s; }
+    #file-editor-save:hover { background: #fff; }
     #toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(16px); background: #141414; border: 1px solid var(--border2); border-radius: 100px; padding: 11px 22px; font-size: 0.8rem; color: var(--text); opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.3s; z-index: 999; white-space: nowrap; }
     #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     #toast.success { color: var(--green); border-color: rgba(57,255,133,0.2); }
@@ -151,6 +169,20 @@
       <div id="confirm-actions">
         <button id="confirm-cancel">cancel</button>
         <button id="confirm-delete">delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="file-editor-overlay">
+    <div id="file-editor-box">
+      <div id="file-editor-header">
+        <span id="file-editor-name"></span>
+        <button id="file-editor-close">✕</button>
+      </div>
+      <textarea id="file-editor-textarea"></textarea>
+      <div id="file-editor-footer">
+        <button id="file-editor-cancel">cancel</button>
+        <button id="file-editor-save">save changes</button>
       </div>
     </div>
   </div>
@@ -291,10 +323,19 @@
           if (canDownload) actions += '<span class="file-row-action file-row-dl" style="color:var(--green);border-color:rgba(57,255,133,0.25);">download</span>';
         }
 
+        let ownerActions = '';
+        if (data.is_owner) {
+          ownerActions = '<div class="file-row-owner-actions">' +
+            (f.is_text ? '<button class="file-hover-btn edit-file-btn" data-id="' + f.id + '" data-name="' + esc(f.name) + '">edit</button>' : '') +
+            '<button class="file-hover-btn del delete-file-btn" data-id="' + f.id + '">delete</button>' +
+            '</div>';
+        }
+
         row.innerHTML =
           '<span class="file-row-name">' + esc(f.name) + '</span>' +
           '<span class="file-row-size">' + esc(f.size_label) + '</span>' +
-          actions;
+          actions +
+          ownerActions;
 
         if (data.instant_download) {
           row.addEventListener('click', () => triggerDownload(f, data));
@@ -309,6 +350,22 @@
             if (dlBtn) dlBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerDownload(f, data); });
             if (!canView) row.addEventListener('click', () => triggerDownload(f, data));
           }
+        }
+
+        if (data.is_owner) {
+          const delBtn = row.querySelector('.delete-file-btn');
+          if (delBtn) delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('delete ' + f.name + '?')) return;
+            const res = await fetch('/api/projects/' + data.slug + '/file/' + f.id, { method: 'DELETE', credentials: 'same-origin' });
+            if (res.ok) { row.remove(); showToast('file deleted', 'success'); }
+            else showToast('could not delete', 'error');
+          });
+          const editBtn = row.querySelector('.edit-file-btn');
+          if (editBtn) editBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            openFileEditor(f, data.slug);
+          });
         }
 
         section.appendChild(row);
@@ -424,6 +481,37 @@
       a.click();
       document.body.removeChild(a);
     }
+
+    async function openFileEditor(f, slug) {
+      const overlay = document.getElementById('file-editor-overlay');
+      const textarea = document.getElementById('file-editor-textarea');
+      document.getElementById('file-editor-name').textContent = f.name;
+      textarea.value = 'loading...';
+      overlay.classList.add('open');
+      try {
+        const res = await fetch('/api/projects/' + slug + '/file/' + f.id + '/content', { credentials: 'same-origin' });
+        const d = await res.json();
+        textarea.value = res.ok ? d.content : 'could not load file.';
+      } catch { textarea.value = 'could not load file.'; }
+      document.getElementById('file-editor-save').onclick = async () => {
+        const btn = document.getElementById('file-editor-save');
+        btn.disabled = true; btn.textContent = 'saving...';
+        try {
+          const res = await fetch('/api/projects/' + slug + '/file/' + f.id + '/content', {
+            method: 'PUT', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: textarea.value })
+          });
+          if (res.ok) { showToast('file saved', 'success'); overlay.classList.remove('open'); }
+          else showToast('save failed', 'error');
+        } catch { showToast('save failed', 'error'); }
+        btn.disabled = false; btn.textContent = 'save changes';
+      };
+    }
+
+    document.getElementById('file-editor-close').addEventListener('click', () => document.getElementById('file-editor-overlay').classList.remove('open'));
+    document.getElementById('file-editor-cancel').addEventListener('click', () => document.getElementById('file-editor-overlay').classList.remove('open'));
+    document.getElementById('file-editor-overlay').addEventListener('click', (e) => { if (e.target === document.getElementById('file-editor-overlay')) document.getElementById('file-editor-overlay').classList.remove('open'); });
 
     function openRawView(file) {
       const rawView = document.getElementById('raw-view');
