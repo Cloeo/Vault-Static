@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vault n Drop — Admin</title>
+  <link rel="stylesheet" href="admin.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="bg-grid"></div>
+  <a href="/" id="logo">vault n drop</a>
+  <div id="scene">
+    <div id="verify-gate" class="panel">
+      <h2 class="panel-title">admin verify check.</h2>
+      <p class="panel-sub">please enter your admin auth code</p>
+      <div class="field-group">
+        <label>admin auth code</label>
+        <input type="text" id="gate-code" placeholder="vaultndrop-xxxxxxxxx" autocomplete="off" spellcheck="false" />
+      </div>
+      <button class="btn-submit" id="gate-submit">submit</button>
+      <p id="gate-err" class="err-msg"></p>
+    </div>
+
+    <div id="admin-panel" class="panel hidden">
+      <div id="admin-header">
+        <div>
+          <h2 class="panel-title">admin panel</h2>
+          <p class="panel-sub" id="admin-welcome"></p>
+        </div>
+        <button id="admin-logout">log out</button>
+      </div>
+
+      <div id="admin-tabs">
+        <button class="tab-btn active" data-tab="users">users</button>
+        <button class="tab-btn" data-tab="projects">projects</button>
+        <button class="tab-btn" data-tab="tokens">tokens</button>
+      </div>
+
+      <div id="tab-users" class="tab-content active">
+        <div class="section-header">
+          <span class="section-title">all users</span>
+          <input type="text" id="user-search" placeholder="search users..." class="search-input" />
+        </div>
+        <div id="users-list" class="data-list"></div>
+      </div>
+
+      <div id="tab-projects" class="tab-content">
+        <div class="section-header">
+          <span class="section-title">all projects</span>
+          <input type="text" id="proj-search" placeholder="search projects..." class="search-input" />
+        </div>
+        <div id="projects-list" class="data-list"></div>
+      </div>
+
+      <div id="tab-tokens" class="tab-content">
+        <div class="section-header">
+          <span class="section-title">admin tokens</span>
+        </div>
+        <div id="tokens-list" class="data-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script src="admin.js"></script>
+</body>
+</html>
