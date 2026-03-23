@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vault n Drop — Project</title>
+  <title>Vault n Drop</title>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -18,122 +18,104 @@
       background-image: linear-gradient(rgba(255,255,255,0.011) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.011) 1px, transparent 1px);
       background-size: 90px 90px; pointer-events: none; z-index: 0;
     }
-    #wrap { max-width: 680px; margin: 0 auto; padding: 80px 24px 80px; position: relative; z-index: 1; }
-    #back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted2); font-size: 0.78rem; text-decoration: none; margin-bottom: 40px; transition: color 0.2s; }
+    #wrap { max-width: 720px; margin: 0 auto; padding: 72px 24px 100px; position: relative; z-index: 1; }
+    #back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted2); font-size: 0.78rem; text-decoration: none; margin-bottom: 44px; transition: color 0.2s; letter-spacing: 0.02em; }
     #back:hover { color: var(--text); }
-    #proj-header { margin-bottom: 32px; display: flex; flex-direction: column; gap: 10px; }
-    #proj-title { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; }
-    #proj-meta { font-size: 0.78rem; color: var(--muted2); display: flex; gap: 12px; flex-wrap: wrap; }
-    #proj-desc { font-size: 0.88rem; color: var(--muted2); line-height: 1.7; }
-    #file-section { margin-top: 36px; display: flex; flex-direction: column; gap: 10px; }
+    #proj-header { margin-bottom: 36px; display: flex; flex-direction: column; gap: 10px; }
+    #proj-title { font-family: 'Syne', sans-serif; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+    #proj-meta { font-size: 0.77rem; color: var(--muted2); display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    #proj-meta span { display: flex; align-items: center; gap: 4px; }
+    #proj-desc { font-size: 0.88rem; color: var(--muted2); line-height: 1.7; margin-top: 4px; }
+    #file-section { display: flex; flex-direction: column; gap: 8px; }
     .file-row {
       display: flex; align-items: center; gap: 14px;
-      background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 18px; cursor: pointer; transition: border-color 0.2s, background 0.2s;
     }
+    .file-row:hover { border-color: var(--border2); background: #111; }
+    .file-row-icon { font-size: 0.8rem; color: var(--muted); flex-shrink: 0; width: 16px; text-align: center; }
     .file-row-name { flex: 1; font-size: 0.85rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .file-row-size { font-size: 0.75rem; color: var(--muted); }
-    .file-dl { background: none; border: 1px solid var(--border2); color: var(--muted2); border-radius: 6px; padding: 5px 12px; font-size: 0.72rem; cursor: pointer; font-family: 'DM Sans', sans-serif; text-decoration: none; transition: color 0.2s, border-color 0.2s; }
-    .file-dl:hover { color: var(--green); border-color: rgba(57,255,133,0.3); }
-    #pw-gate { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; margin-top: 32px; }
-    #pw-gate p { font-size: 0.85rem; color: var(--muted2); }
-    #pw-input { background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 0.85rem; color: var(--text); font-family: 'DM Sans', sans-serif; outline: none; width: 280px; }
-    #pw-input:focus { border-color: rgba(57,255,133,0.25); }
-    #pw-btn { background: var(--green); color: #000; border: none; border-radius: 100px; padding: 10px 22px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+    .file-row-size { font-size: 0.74rem; color: var(--muted); flex-shrink: 0; }
+    .file-row-action { font-size: 0.72rem; color: var(--muted2); flex-shrink: 0; padding: 4px 10px; border: 1px solid var(--border2); border-radius: 6px; transition: color 0.2s, border-color 0.2s; }
+    .file-row:hover .file-row-action { color: var(--green); border-color: rgba(57,255,133,0.25); }
+
+    #viewer-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+      z-index: 200; display: flex; align-items: flex-start; justify-content: center;
+      padding: 40px 20px; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    }
+    #viewer-overlay.open { opacity: 1; pointer-events: all; }
+    #viewer-box {
+      background: #0c0c0c; border: 1px solid var(--border2); border-radius: 14px;
+      width: 100%; max-width: 860px; max-height: 85vh; display: flex; flex-direction: column;
+      overflow: hidden; transform: translateY(12px); transition: transform 0.25s cubic-bezier(0.16,1,0.3,1);
+    }
+    #viewer-overlay.open #viewer-box { transform: translateY(0); }
+    #viewer-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    #viewer-filename { font-size: 0.82rem; color: var(--text); font-weight: 500; }
+    #viewer-close {
+      background: none; border: none; color: var(--muted); font-size: 1rem;
+      cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: color 0.2s;
+    }
+    #viewer-close:hover { color: var(--text); }
+    #viewer-content {
+      flex: 1; overflow-y: auto; padding: 24px 24px;
+      font-family: 'DM Mono', 'Courier New', monospace; font-size: 0.82rem;
+      line-height: 1.75; color: #ccc; white-space: pre-wrap; word-break: break-word;
+    }
+    #viewer-content.loading { display: flex; align-items: center; justify-content: center; color: var(--muted); font-family: 'DM Sans', sans-serif; min-height: 200px; }
+
+    #pw-gate {
+      display: flex; flex-direction: column; align-items: center; gap: 20px;
+      padding: 80px 24px; text-align: center;
+    }
+    #pw-gate-title { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
+    #pw-gate-sub { font-size: 0.82rem; color: var(--muted2); }
+    #pw-gate-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; }
+    #pw-gate-label { font-size: 0.7rem; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.1em; text-align: left; }
+    #pw-input {
+      background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 13px 16px; font-size: 0.88rem; color: var(--text); font-family: 'DM Sans', sans-serif;
+      outline: none; transition: border-color 0.2s; width: 100%;
+    }
+    #pw-input:focus { border-color: rgba(57,255,133,0.3); }
+    #pw-input.error { border-color: rgba(255,77,77,0.4); }
+    #pw-btn {
+      background: var(--green); color: #000; border: none; border-radius: 100px;
+      padding: 13px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem;
+      cursor: pointer; transition: background 0.2s;
+    }
+    #pw-btn:hover { background: #fff; }
     #pw-err { font-size: 0.78rem; color: #ff6b6b; display: none; }
     #pw-err.show { display: block; }
+
+    #not-found { padding: 80px 0; text-align: center; color: var(--muted); }
+    #not-found h2 { font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 800; margin-bottom: 12px; color: var(--text); }
   </style>
 </head>
 <body>
   <div id="bg-grid"></div>
   <div id="wrap">
     <a href="/" id="back">← vault n drop</a>
-    <div id="proj-header">
-      <h1 id="proj-title">loading...</h1>
-      <div id="proj-meta"></div>
-      <p id="proj-desc"></p>
-    </div>
-    <div id="content"></div>
+    <div id="root"></div>
   </div>
+
+  <div id="viewer-overlay">
+    <div id="viewer-box">
+      <div id="viewer-header">
+        <span id="viewer-filename"></span>
+        <button id="viewer-close">✕</button>
+      </div>
+      <div id="viewer-content" class="loading">loading...</div>
+    </div>
+  </div>
+
   <script>
     const slug = window.location.pathname.split('/p/')[1];
-    let projectData = null;
-
-    async function load() {
-      try {
-        const res = await fetch('/api/projects/' + slug);
-        const data = await res.json();
-        if (data.locked) {
-          showGate();
-          return;
-        }
-        if (!res.ok) {
-          document.getElementById('proj-title').textContent = 'project not found';
-          return;
-        }
-        projectData = data;
-        render(data);
-      } catch {
-        document.getElementById('proj-title').textContent = 'could not load project';
-      }
-    }
-
-    function render(data) {
-      document.title = data.title + ' — Vault n Drop';
-      document.getElementById('proj-title').textContent = data.title;
-      document.getElementById('proj-desc').textContent = data.description || '';
-      document.getElementById('proj-meta').innerHTML =
-        '<span>by ' + esc(data.owner) + '</span>' +
-        '<span>·</span>' +
-        '<span>' + data.files.length + ' file' + (data.files.length !== 1 ? 's' : '') + '</span>' +
-        (data.is_downloadable ? '<span>·</span><span>downloadable</span>' : '');
-
-      const section = document.createElement('div');
-      section.id = 'file-section';
-      data.files.forEach(f => {
-        const row = document.createElement('div');
-        row.className = 'file-row';
-        row.innerHTML =
-          '<span class="file-row-name">' + esc(f.name) + '</span>' +
-          '<span class="file-row-size">' + esc(f.size_label) + '</span>' +
-          (data.is_downloadable
-            ? '<a class="file-dl" href="/api/projects/' + slug + '/download/' + f.id + '">download</a>'
-            : '');
-        section.appendChild(row);
-      });
-      document.getElementById('content').appendChild(section);
-    }
-
-    function showGate() {
-      document.getElementById('proj-title').textContent = 'private project';
-      const gate = document.createElement('div');
-      gate.id = 'pw-gate';
-      gate.innerHTML =
-        '<p>this project is password protected</p>' +
-        '<input id="pw-input" type="password" placeholder="enter project password" />' +
-        '<button id="pw-btn">unlock</button>' +
-        '<span id="pw-err">wrong password</span>';
-      document.getElementById('content').appendChild(gate);
-      document.getElementById('pw-btn').addEventListener('click', unlock);
-      document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
-    }
-
-    async function unlock() {
-      const pw = document.getElementById('pw-input').value;
-      const err = document.getElementById('pw-err');
-      err.classList.remove('show');
-      try {
-        const res = await fetch('/api/projects/' + slug + '?password=' + encodeURIComponent(pw));
-        const data = await res.json();
-        if (res.ok && !data.locked) {
-          document.getElementById('pw-gate').remove();
-          render(data);
-        } else {
-          err.classList.add('show');
-        }
-      } catch {
-        err.classList.add('show');
-      }
-    }
+    let unlockedPassword = null;
 
     function esc(str) {
       if (!str) return '';
@@ -142,7 +124,152 @@
       return d.innerHTML;
     }
 
-    load();
+    function isText(mime) {
+      return mime && (mime.startsWith('text/') || mime === 'application/json');
+    }
+
+    async function load(password) {
+      const root = document.getElementById('root');
+      root.innerHTML = '';
+      let url = '/api/projects/' + slug;
+      if (password) url += '?password=' + encodeURIComponent(password);
+
+      try {
+        const res = await fetch(url, { credentials: 'same-origin' });
+        const data = await res.json();
+
+        if (data.locked) { renderGate(false); return; }
+        if (!res.ok) { renderNotFound(); return; }
+
+        unlockedPassword = password || null;
+        renderProject(data);
+      } catch (e) {
+        renderNotFound();
+      }
+    }
+
+    function renderProject(data) {
+      document.title = data.title + ' — Vault n Drop';
+      const root = document.getElementById('root');
+
+      const header = document.createElement('div');
+      header.id = 'proj-header';
+      header.innerHTML =
+        '<h1 id="proj-title">' + esc(data.title) + '</h1>' +
+        '<div id="proj-meta">' +
+          '<span>by ' + esc(data.owner) + '</span>' +
+          '<span>·</span>' +
+          '<span>' + data.files.length + ' file' + (data.files.length !== 1 ? 's' : '') + '</span>' +
+          (data.is_downloadable ? '<span>·</span><span>downloadable</span>' : '') +
+          (data.is_private ? '<span>·</span><span style="color:var(--muted)">private</span>' : '') +
+        '</div>' +
+        (data.description ? '<p id="proj-desc">' + esc(data.description) + '</p>' : '');
+      root.appendChild(header);
+
+      const section = document.createElement('div');
+      section.id = 'file-section';
+
+      data.files.forEach(f => {
+        const row = document.createElement('div');
+        row.className = 'file-row';
+
+        const icon = f.is_text ? '≡' : '○';
+        const action = f.is_text ? 'view' : (data.is_downloadable ? 'download' : 'view');
+
+        row.innerHTML =
+          '<span class="file-row-icon">' + icon + '</span>' +
+          '<span class="file-row-name">' + esc(f.name) + '</span>' +
+          '<span class="file-row-size">' + esc(f.size_label) + '</span>' +
+          '<span class="file-row-action">' + action + '</span>';
+
+        row.addEventListener('click', () => {
+          if (f.is_text) {
+            openViewer(f, data.slug);
+          } else if (data.is_downloadable) {
+            window.location.href = '/api/projects/' + data.slug + '/download/' + f.id;
+          }
+        });
+
+        section.appendChild(row);
+      });
+
+      root.appendChild(section);
+    }
+
+    function renderGate(wrongPw) {
+      document.title = 'Private Project — Vault n Drop';
+      const root = document.getElementById('root');
+      root.innerHTML =
+        '<div id="pw-gate">' +
+          '<h2 id="pw-gate-title">private project</h2>' +
+          '<p id="pw-gate-sub">this project is password protected</p>' +
+          '<div id="pw-gate-form">' +
+            '<label id="pw-gate-label">enter project password</label>' +
+            '<input id="pw-input" type="password" placeholder="project password" />' +
+            (wrongPw ? '<span id="pw-err show" style="display:block;font-size:0.78rem;color:#ff6b6b;">wrong password</span>' : '') +
+            '<button id="pw-btn">unlock</button>' +
+          '</div>' +
+        '</div>';
+
+      const input = document.getElementById('pw-input');
+      const btn = document.getElementById('pw-btn');
+
+      btn.addEventListener('click', () => {
+        const val = input.value;
+        if (!val) { input.classList.add('error'); return; }
+        input.classList.remove('error');
+        load(val);
+      });
+
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+    }
+
+    function renderNotFound() {
+      document.title = 'Not Found — Vault n Drop';
+      document.getElementById('root').innerHTML =
+        '<div id="not-found"><h2>project not found</h2><p>this project may have been deleted or never existed.</p></div>';
+    }
+
+    function openViewer(file, projectSlug) {
+      const overlay = document.getElementById('viewer-overlay');
+      const content = document.getElementById('viewer-content');
+      const filename = document.getElementById('viewer-filename');
+
+      filename.textContent = file.name;
+      content.textContent = 'loading...';
+      content.className = 'loading';
+      overlay.classList.add('open');
+
+      let url = '/api/projects/' + projectSlug + '/file/' + file.id + '/view';
+      if (unlockedPassword) url += '?password=' + encodeURIComponent(unlockedPassword);
+
+      fetch(url, { credentials: 'same-origin' })
+        .then(r => r.text())
+        .then(text => {
+          content.className = '';
+          content.textContent = text;
+        })
+        .catch(() => {
+          content.className = '';
+          content.textContent = 'could not load file.';
+        });
+    }
+
+    document.getElementById('viewer-close').addEventListener('click', () => {
+      document.getElementById('viewer-overlay').classList.remove('open');
+    });
+
+    document.getElementById('viewer-overlay').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('viewer-overlay')) {
+        document.getElementById('viewer-overlay').classList.remove('open');
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') document.getElementById('viewer-overlay').classList.remove('open');
+    });
+
+    load(null);
   </script>
 </body>
 </html>
