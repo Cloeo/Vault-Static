@@ -42,6 +42,7 @@ db.exec(`
     password TEXT DEFAULT NULL,
     is_downloadable INTEGER DEFAULT 0,
     instant_download INTEGER DEFAULT 0,
+    roblox INTEGER DEFAULT 0,
     views INTEGER DEFAULT 0,
     last_accessed INTEGER DEFAULT (strftime('%s','now')),
     created_at INTEGER DEFAULT (strftime('%s','now')),
@@ -79,6 +80,7 @@ db.exec(`
 try { db.exec(`ALTER TABLE projects ADD COLUMN last_accessed INTEGER DEFAULT (strftime('%s','now'));`); } catch(e) {}
 try { db.exec(`ALTER TABLE projects ADD COLUMN views INTEGER DEFAULT 0;`); } catch(e) {}
 try { db.exec(`ALTER TABLE projects ADD COLUMN instant_download INTEGER DEFAULT 0;`); } catch(e) {}
+try { db.exec(`ALTER TABLE projects ADD COLUMN roblox INTEGER DEFAULT 0;`); } catch(e) {}
 try { db.exec(`ALTER TABLE project_files ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream';`); } catch(e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0;`); } catch(e) {}
 
@@ -298,7 +300,7 @@ app.post('/api/bot/gift-code-open', (req, res) => {
 
 app.post('/api/projects', requireAuthAPI, upload.array('files', 100), async (req, res) => {
   try {
-    const { title, description, is_private, is_downloadable, instant_download, password } = req.body;
+    const { title, description, is_private, is_downloadable, instant_download, roblox, password } = req.body;
     if (!title) return res.status(400).json({ error: 'title is required' });
     if (!req.files || !req.files.length) return res.status(400).json({ error: 'at least one file required' });
     const isPrivate = is_private === '1';
@@ -307,8 +309,8 @@ app.post('/api/projects', requireAuthAPI, upload.array('files', 100), async (req
     let slug = generateSlug();
     while (db.prepare('SELECT id FROM projects WHERE slug = ?').get(slug)) slug = generateSlug();
     const proj = db.prepare(
-      'INSERT INTO projects (user_id, title, description, slug, is_private, password, is_downloadable, instant_download, last_accessed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.session.userId, title.slice(0, 120), (description || '').slice(0, 500), slug, isPrivate ? 1 : 0, hashedPw, is_downloadable === '1' ? 1 : 0, instant_download === '1' ? 1 : 0, Math.floor(Date.now() / 1000));
+      'INSERT INTO projects (user_id, title, description, slug, is_private, password, is_downloadable, instant_download, roblox, last_accessed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.session.userId, title.slice(0, 120), (description || '').slice(0, 500), slug, isPrivate ? 1 : 0, hashedPw, is_downloadable === '1' ? 1 : 0, instant_download === '1' ? 1 : 0, roblox === '1' ? 1 : 0, Math.floor(Date.now() / 1000));
     const insertFile = db.prepare('INSERT INTO project_files (project_id, original_name, stored_name, mime_type, size) VALUES (?, ?, ?, ?, ?)');
     req.files.forEach(f => insertFile.run(proj.lastInsertRowid, f.originalname, f.filename, getMimeType(f.originalname), f.size));
     return res.json({ ok: true, slug });
@@ -321,7 +323,7 @@ app.get('/api/projects/mine', requireAuthAPI, (req, res) => {
     const count = db.prepare('SELECT COUNT(*) as c FROM project_files WHERE project_id = ?').get(p.id);
     const likeCount = db.prepare('SELECT COUNT(*) as c FROM project_likes WHERE project_id = ?').get(p.id);
     const commentCount = db.prepare('SELECT COUNT(*) as c FROM project_comments WHERE project_id = ?').get(p.id);
-    return { id: p.id, title: p.title, description: p.description, slug: p.slug, is_private: !!p.is_private, is_downloadable: !!p.is_downloadable, instant_download: !!p.instant_download, file_count: count.c, views: p.views || 0, likes: likeCount.c, comments: commentCount.c };
+    return { id: p.id, title: p.title, description: p.description, slug: p.slug, is_private: !!p.is_private, is_downloadable: !!p.is_downloadable, instant_download: !!p.instant_download, roblox: !!p.roblox, file_count: count.c, views: p.views || 0, likes: likeCount.c, comments: commentCount.c };
   }));
 });
 
@@ -363,7 +365,7 @@ app.get('/api/projects/:slug', async (req, res) => {
     return res.json({
       title: proj.title, description: proj.description, owner: proj.owner,
       is_downloadable: !!proj.is_downloadable, instant_download: !!proj.instant_download,
-      is_private: !!proj.is_private, slug: proj.slug,
+      roblox: !!proj.roblox, is_private: !!proj.is_private, slug: proj.slug,
       views: updatedProj.views || 0, likes: likeCount.c, comments: commentCount.c,
       user_liked: userLiked, is_owner: isOwner,
       files: files.map(f => ({ id: f.id, name: f.original_name, size_label: formatBytes(f.size), mime_type: f.mime_type || getMimeType(f.original_name), is_text: isTextFile(f.original_name) }))
