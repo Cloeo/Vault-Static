@@ -97,6 +97,12 @@ function buildMyCard(p) {
       <span>${p.file_count} file${p.file_count !== 1 ? 's' : ''}</span>
       <span>·</span>
       <span>${p.is_downloadable ? 'downloadable' : 'view only'}</span>
+      <span>·</span>
+      <span>${p.views || 0} views</span>
+      <span>·</span>
+      <span>${p.likes || 0} likes</span>
+      <span>·</span>
+      <span>${p.comments || 0} comments</span>
     </div>
     <div class="proj-card-actions">
       <button class="proj-link-btn copy" data-link="${link}">copy link</button>
