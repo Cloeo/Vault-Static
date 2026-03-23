@@ -290,32 +290,70 @@ nav {
 }
 
 .proj-link-btn {
-  font-size: 0.75rem;
-  padding: 6px 14px;
+  font-size: 0.73rem;
+  padding: 7px 16px;
   border-radius: 100px;
   border: 1px solid var(--border2);
-  background: none;
+  background: #141414;
   color: var(--muted2);
   cursor: pointer;
   font-family: 'DM Sans', sans-serif;
-  transition: color 0.2s, border-color 0.2s;
+  font-weight: 500;
+  transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.15s;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  letter-spacing: 0.01em;
 }
 
 .proj-link-btn:hover {
   color: var(--text);
-  border-color: var(--muted);
+  border-color: #333;
+  background: #1a1a1a;
+  transform: scale(1.02);
 }
 
 .proj-link-btn.copy {
   color: var(--blue);
-  border-color: rgba(77,159,255,0.2);
+  border-color: rgba(77,159,255,0.25);
+  background: rgba(77,159,255,0.05);
 }
 
 .proj-link-btn.copy:hover {
   border-color: var(--blue);
+  background: rgba(77,159,255,0.1);
+}
+
+.proj-link-btn.roblox-copy {
+  color: #ff6b35;
+  border-color: rgba(255,107,53,0.25);
+  background: rgba(255,107,53,0.06);
+}
+
+.proj-link-btn.roblox-copy:hover {
+  border-color: #ff6b35;
+  background: rgba(255,107,53,0.12);
+}
+
+.proj-link-btn.open-btn {
+  color: var(--muted2);
+  border-color: var(--border2);
+}
+
+.proj-link-btn.open-btn:hover {
+  color: var(--text);
+}
+
+.proj-link-btn.delete-btn {
+  color: rgba(255,77,77,0.7);
+  border-color: rgba(255,77,77,0.2);
+  background: rgba(255,77,77,0.04);
+}
+
+.proj-link-btn.delete-btn:hover {
+  color: #ff4d4d;
+  border-color: rgba(255,77,77,0.5);
+  background: rgba(255,77,77,0.08);
 }
 
 #empty-state, #public-empty {
@@ -433,22 +471,34 @@ nav {
   pointer-events: all;
 }
 
-#btn-browse-files, #btn-browse-folder {
+#btn-browse-files {
+  background: var(--green);
+  border: none;
+  color: #000;
+  border-radius: 100px;
+  padding: 8px 20px;
+  font-size: 0.76rem;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+
+#btn-browse-files:hover {
+  background: #fff;
+  transform: scale(1.03);
+}
+
+#btn-browse-folder {
   background: none;
   border: 1px solid var(--border2);
   color: var(--muted2);
   border-radius: 100px;
-  padding: 7px 18px;
+  padding: 8px 20px;
   font-size: 0.76rem;
   font-family: 'DM Sans', sans-serif;
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
-}
-
-#btn-browse-files:hover {
-  color: var(--text);
-  border-color: rgba(57,255,133,0.3);
-  background: rgba(57,255,133,0.04);
+  transition: color 0.2s, border-color 0.2s;
 }
 
 #btn-browse-folder:hover {
