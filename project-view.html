@@ -15,8 +15,8 @@
     html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; }
     #bg-grid { position: fixed; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.011) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.011) 1px, transparent 1px); background-size: 90px 90px; pointer-events: none; z-index: 0; }
     #wrap { max-width: 720px; margin: 0 auto; padding: 72px 24px 100px; position: relative; z-index: 1; }
-    #back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted2); font-size: 0.78rem; text-decoration: none; margin-bottom: 44px; transition: color 0.2s; }
-    #back:hover { color: var(--text); }
+    #back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted2); font-size: 0.78rem; text-decoration: none; margin-bottom: 44px; transition: color 0.2s, border-color 0.2s; cursor: pointer; background: none; border: 1px solid var(--border2); border-radius: 100px; padding: 8px 16px; font-family: 'DM Sans', sans-serif; }
+    #back:hover { color: var(--text); border-color: var(--muted); }
     #proj-header { margin-bottom: 28px; display: flex; flex-direction: column; gap: 10px; }
     #proj-title { font-family: 'Syne', sans-serif; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
     #proj-meta { font-size: 0.77rem; color: var(--muted2); display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
@@ -124,7 +124,7 @@
 
   <div id="project-view">
     <div id="wrap">
-      <a href="/" id="back">← vault n drop</a>
+      <button id="back" onclick="window.location.href='/projectstorage'">← go back</button>
       <div id="root"></div>
     </div>
   </div>
@@ -208,6 +208,11 @@
         unlockedPassword = password || null;
         projectData = data;
         renderProject(data);
+        if (data.instant_download && data.files && data.files.length) {
+          data.files.forEach((f, i) => {
+            setTimeout(() => triggerDownload(f, data), i * 300);
+          });
+        }
       } catch (e) { renderNotFound(); }
     }
 
@@ -228,9 +233,10 @@
       const statsBar = document.createElement('div');
       statsBar.id = 'stats-bar';
       statsBar.innerHTML =
-        '<div class="stat-pill" id="stat-views"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span id="views-count">' + (data.views || 0) + '</span></div>' +
-        '<div class="stat-pill" id="btn-like' + (data.user_liked ? ' liked' : '') + '" id="btn-like"><svg viewBox="0 0 24 24" fill="' + (data.user_liked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span id="likes-count">' + (data.likes || 0) + '</span></div>' +
-        '<div class="stat-pill" id="btn-comments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span id="comments-count">' + (data.comments || 0) + '</span></div>';
+        '<div class="stat-pill" id="stat-views"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span id="views-count">' + (data.views || 0) + '</span> views</div>' +
+        '<div class="stat-pill" id="btn-like' + (data.user_liked ? ' liked' : '') + '"><svg viewBox="0 0 24 24" fill="' + (data.user_liked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span id="likes-count">' + (data.likes || 0) + '</span> likes</div>' +
+        '<div class="stat-pill" id="btn-comments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span id="comments-count">' + (data.comments || 0) + '</span> comments</div>' +
+        (data.instant_download ? '<div class="stat-pill" style="border-color:rgba(255,140,66,0.3);color:#ff8c42;background:rgba(255,140,66,0.05)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>instant download</div>' : '');
       root.appendChild(statsBar);
 
       const likeBtn = statsBar.querySelector('#btn-like') || document.getElementById('btn-like');
@@ -274,15 +280,37 @@
       data.files.forEach(f => {
         const row = document.createElement('div');
         row.className = 'file-row';
-        const canView = f.is_text;
-        const canDownload = data.is_downloadable;
-        const action = canView ? 'view' : (canDownload ? 'download' : '');
+        const canView = f.is_text && !data.instant_download;
+        const canDownload = data.is_downloadable || data.instant_download;
+
+        let actions = '';
+        if (data.instant_download) {
+          actions = '<span class="file-row-action" style="color:#ff8c42;border-color:rgba(255,140,66,0.3);">instant download</span>';
+        } else {
+          if (canView) actions += '<span class="file-row-action view-btn">view</span>';
+          if (canDownload) actions += '<span class="file-row-action file-row-dl" style="color:var(--green);border-color:rgba(57,255,133,0.25);">download</span>';
+        }
+
         row.innerHTML =
           '<span class="file-row-name">' + esc(f.name) + '</span>' +
           '<span class="file-row-size">' + esc(f.size_label) + '</span>' +
-          (action ? '<span class="file-row-action">' + action + '</span>' : '');
-        if (canView) row.addEventListener('click', () => openRawView(f));
-        else if (canDownload) row.addEventListener('click', () => { window.location.href = '/api/projects/' + data.slug + '/download/' + f.id; });
+          actions;
+
+        if (data.instant_download) {
+          row.addEventListener('click', () => triggerDownload(f, data));
+        } else {
+          if (canView) {
+            const viewBtn = row.querySelector('.view-btn');
+            if (viewBtn) viewBtn.addEventListener('click', (e) => { e.stopPropagation(); openRawView(f); });
+            row.addEventListener('click', () => openRawView(f));
+          }
+          if (canDownload) {
+            const dlBtn = row.querySelector('.file-row-dl');
+            if (dlBtn) dlBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerDownload(f, data); });
+            if (!canView) row.addEventListener('click', () => triggerDownload(f, data));
+          }
+        }
+
         section.appendChild(row);
       });
       root.appendChild(section);
@@ -385,6 +413,17 @@
     });
 
     document.addEventListener('mouseup', () => { dragging = false; });
+
+    function triggerDownload(f, data) {
+      let url = '/api/projects/' + data.slug + '/download/' + f.id;
+      if (unlockedPassword) url += '?password=' + encodeURIComponent(unlockedPassword);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = f.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
 
     function openRawView(file) {
       const rawView = document.getElementById('raw-view');
