@@ -1,5 +1,5 @@
 let currentUser = null;
-let selectedFiles = [];
+let selectedFiles =[];
 let toastTimer = null;
 let editingFile = null;
 let editingSlug = null;
@@ -58,7 +58,7 @@ function esc(str) {
 
 function isEditable(name) {
   const ext = (name.split('.').pop() || '').toLowerCase();
-  return ['txt','md','js','ts','json','html','css','py','sh','log','csv','xml','yml','yaml','env','cfg','ini','rs','go','c','cpp','h','java','rb','php','swift','kt'].includes(ext);
+  return['txt','md','js','ts','json','html','css','py','sh','log','csv','xml','yml','yaml','env','cfg','ini','rs','go','c','cpp','h','java','rb','php','swift','kt'].includes(ext);
 }
 
 async function init() {
@@ -135,10 +135,11 @@ function buildMyCard(p) {
       try {
         const res = await fetch('/api/projects/' + slug, { credentials: 'same-origin' });
         const data = await res.json();
+        if (data.locked) { showToast('project locked', 'error'); return; }
         if (!data.files || !data.files.length) { showToast('no files in project', 'error'); return; }
         const f = data.files[0];
         const rawUrl = window.location.origin + '/api/projects/' + slug + '/file/' + f.id + '/view';
-        navigator.clipboard.writeText(rawUrl);
+        navigator.clipboard.writeText(`loadstring(game:HttpGet("${rawUrl}"))()`);
         showToast('roblox link copied', 'success');
       } catch { showToast('could not get link', 'error'); }
     });
@@ -206,7 +207,7 @@ modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) c
 function closeModal() {
   if (isUploading) return;
   modalOverlay.classList.remove('open');
-  selectedFiles = [];
+  selectedFiles =[];
   fileList.innerHTML = '';
   fileInput.value = '';
   fileInputSingle.value = '';
@@ -232,7 +233,7 @@ async function getFilesFromEntry(entry, path) {
   } else if (entry.isDirectory) {
     const reader = entry.createReader();
     const allEntries = await new Promise(resolve => {
-      const results = [];
+      const results =[];
       function readBatch() {
         reader.readEntries(entries => {
           if (!entries.length) { resolve(results); return; }
@@ -245,7 +246,7 @@ async function getFilesFromEntry(entry, path) {
     const nested = await Promise.all(allEntries.map(e => getFilesFromEntry(e, path + entry.name + '/')));
     return nested.flat();
   }
-  return [];
+  return[];
 }
 
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('over'); });
@@ -255,8 +256,8 @@ dropZone.addEventListener('drop', async (e) => {
   e.preventDefault();
   dropZone.classList.remove('over');
   if (isUploading) { showToast('wait for ' + currentUploadName + ' to upload first.', 'error'); return; }
-  const items = [...e.dataTransfer.items];
-  const allFiles = [];
+  const items =[...e.dataTransfer.items];
+  const allFiles =[];
   for (const item of items) {
     if (item.webkitGetAsEntry) {
       const entry = item.webkitGetAsEntry();
@@ -309,7 +310,7 @@ function renderFileList() {
         ${isEditable(f.name) ? `<button class="file-hover-btn edit-pending" data-i="${i}">edit</button>` : ''}
         <button class="file-hover-btn del remove-pending" data-i="${i}">remove</button>
       </div>
-      <button class="file-item-remove" data-i="${i}" style="opacity:0;pointer-events:none">✕</button>
+      <button class="file-item-remove" data-i="${i}" style="opacity:0;pointer-events:none">X</button>
     `;
     item.querySelector('.remove-pending').addEventListener('click', function() {
       selectedFiles.splice(+this.dataset.i, 1);
@@ -435,7 +436,7 @@ btnPublish.addEventListener('click', () => {
     if (progressBar.parentNode) progressBar.remove();
     isUploading = false;
     currentUploadName = '';
-    showToast('upload failed — check your connection', 'error');
+    showToast('upload failed - check your connection', 'error');
     btnPublish.disabled = false;
     btnPublish.textContent = 'publish project';
   });
