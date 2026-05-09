@@ -58,7 +58,7 @@ function esc(str) {
 
 function isEditable(name) {
   const ext = (name.split('.').pop() || '').toLowerCase();
-  return['txt','md','js','ts','json','html','css','py','sh','log','csv','xml','yml','yaml','env','cfg','ini','rs','go','c','cpp','h','java','rb','php','swift','kt'].includes(ext);
+  return['txt','md','js','ts','json','html','css','py','sh','log','csv','xml','yml','yaml','env','cfg','ini','rs','go','c','cpp','h','java','rb','php','swift','kt','lua'].includes(ext);
 }
 
 async function init() {
