@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY, project_id INTEGER,
 CREATE TABLE IF NOT EXISTS admin_tokens (id INTEGER PRIMARY KEY, code TEXT UNIQUE, used INTEGER DEFAULT 0, website_username TEXT, created_at INTEGER);
 `);
 
+const addCol = (t, c, d) => { try { db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} ${d}`); } catch(e){} };
+addCol('projects', 'password', 'TEXT');
+addCol('projects', 'is_downloadable', 'INTEGER DEFAULT 0');
+addCol('projects', 'instant_download', 'INTEGER DEFAULT 0');
+addCol('projects', 'roblox', 'INTEGER DEFAULT 0');
+addCol('projects', 'views', 'INTEGER DEFAULT 0');
+addCol('files', 'is_text', 'INTEGER DEFAULT 0');
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 app.use(session({
@@ -64,11 +72,13 @@ app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   if (!user) return res.status(400).json({error: 'user not found', field: 'username'});
-  const match = await bcrypt.compare(password, user.password);
-  if (!match) return res.status(400).json({error: 'wrong password', field: 'password'});
-  req.session.userId = user.id;
-  if (user.is_admin) req.session.isAdmin = true;
-  res.json({ok: true});
+  try {
+    const match = await bcrypt.compare(password, user.password || '');
+    if (!match) return res.status(400).json({error: 'wrong password', field: 'password'});
+    req.session.userId = user.id;
+    if (user.is_admin) req.session.isAdmin = true;
+    res.json({ok: true});
+  } catch(e) { res.status(400).json({error: 'auth error'}); }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -151,8 +161,10 @@ app.get('/api/projects/:slug', async (req, res) => {
   
   if (p.is_private && p.owner_id !== req.session.userId) {
     if (!p.password) return res.json({locked: true});
-    const match = await bcrypt.compare(req.query.password || '', p.password);
-    if (!match) return res.json({locked: true});
+    try {
+      const match = await bcrypt.compare(req.query.password || '', p.password);
+      if (!match) return res.json({locked: true});
+    } catch(e) { return res.json({locked: true}); }
   }
   
   delete p.password;
@@ -220,8 +232,10 @@ app.get('/api/projects/:slug/file/:id/content', async (req, res) => {
   
   if (f.is_private && f.owner_id !== req.session.userId && !f.roblox) {
     if (!f.password) return res.status(403).json({error: 'locked'});
-    const match = await bcrypt.compare(req.query.password || '', f.password);
-    if (!match) return res.status(403).json({error: 'locked'});
+    try {
+      const match = await bcrypt.compare(req.query.password || '', f.password);
+      if (!match) return res.status(403).json({error: 'locked'});
+    } catch(e) { return res.status(403).json({error: 'locked'}); }
   }
   
   try { const content = fs.readFileSync(path.join('uploads', path.basename(f.path)), 'utf8'); res.json({content}); } catch(e) { res.status(500).json({error: 'read failed'}); }
@@ -240,8 +254,10 @@ app.get('/api/projects/:slug/file/:id/view', async (req, res) => {
   
   if (f.is_private && f.owner_id !== req.session.userId && !f.roblox) {
     if (!f.password) return res.status(403).send('locked');
-    const match = await bcrypt.compare(req.query.password || '', f.password);
-    if (!match) return res.status(403).send('locked');
+    try {
+      const match = await bcrypt.compare(req.query.password || '', f.password);
+      if (!match) return res.status(403).send('locked');
+    } catch(e) { return res.status(403).send('locked'); }
   }
   
   res.setHeader('Content-Type', 'text/plain');
@@ -254,8 +270,10 @@ app.get('/api/projects/:slug/download/:id', async (req, res) => {
   
   if (f.is_private && f.owner_id !== req.session.userId && !f.roblox) {
     if (!f.password) return res.status(403).send('locked');
-    const match = await bcrypt.compare(req.query.password || '', f.password);
-    if (!match) return res.status(403).send('locked');
+    try {
+      const match = await bcrypt.compare(req.query.password || '', f.password);
+      if (!match) return res.status(403).send('locked');
+    } catch(e) { return res.status(403).send('locked'); }
   }
   
   res.download(path.join(__dirname, 'uploads', path.basename(f.path)), path.basename(f.name));
